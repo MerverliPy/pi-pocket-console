@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1, viewport-fit=cover"
+		/>
+		<meta name="theme-color" content="#080b0e" media="(prefers-color-scheme: dark)" />
+		<meta name="theme-color" content="#eef4f4" media="(prefers-color-scheme: light)" />
+		<meta name="color-scheme" content="dark light" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+		<meta name="apple-mobile-web-app-title" content="Pi Pocket" />
+		<meta name="format-detection" content="telephone=no" />
+		<meta name="description" content="An iPhone-first remote controller for Pi coding-agent instances." />
+		<link rel="manifest" href="/manifest.webmanifest" />
+		<link rel="icon" href="/icon.svg" type="image/svg+xml" />
+		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+		<link rel="stylesheet" href="/app.css" />
+		<title>Pi Pocket Console</title>
+	</head>
+	<body>
+		<a class="skip-link" href="#main-content">Skip to console</a>
+		<div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+		<main id="pair-screen" class="pair-screen" aria-labelledby="pair-title">
+			<div class="pair-glow" aria-hidden="true"></div>
+			<section class="pair-card">
+				<div class="brand-lockup">
+					<div class="brand-mark" aria-hidden="true">
+						<svg viewBox="0 0 48 48" role="img">
+							<path d="M13 10.5h13.5c6.9 0 12.5 5.6 12.5 12.5S33.4 35.5 26.5 35.5H20V42h-7V10.5Z" />
+							<path class="brand-cut" d="M20 17.5h6.2a5.5 5.5 0 0 1 0 11H20v-11Z" />
+							<circle cx="36.5" cy="11.5" r="3.5" />
+						</svg>
+					</div>
+					<div>
+						<p class="eyebrow">Remote agent control</p>
+						<h1 id="pair-title">Pi Pocket Console</h1>
+					</div>
+				</div>
+
+				<div class="pair-intro">
+					<span class="pulse-dot" aria-hidden="true"></span>
+					<p>Connect this iPhone to the pairing code shown by your Pi Pocket host.</p>
+				</div>
+
+				<form id="pair-form" class="pair-form" novalidate>
+					<label for="pair-code">Pairing code</label>
+					<div class="code-field">
+						<input
+							id="pair-code"
+							name="code"
+							type="text"
+							inputmode="numeric"
+							autocomplete="one-time-code"
+							autocapitalize="off"
+							spellcheck="false"
+							placeholder="000 000"
+							aria-describedby="pair-help pair-error"
+							maxlength="12"
+							required
+						/>
+						<span id="code-count" aria-hidden="true">6 digits</span>
+					</div>
+					<p id="pair-help" class="field-help">The code expires on the host. It is used only to establish this controller.</p>
+					<p id="pair-error" class="form-error" role="alert"></p>
+					<button id="pair-submit" class="primary-button" type="submit">
+						<span>Pair this iPhone</span>
+						<svg viewBox="0 0 24 24" aria-hidden="true">
+							<path d="m9 18 6-6-6-6" />
+						</svg>
+					</button>
+				</form>
+
+				<aside class="access-warning" aria-labelledby="access-title">
+					<div class="warning-icon" aria-hidden="true">
+						<svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4L12 3Z" /><path d="M12 9v5" /><circle cx="12" cy="17" r=".8" /></svg>
+					</div>
+					<div>
+						<h2 id="access-title">Full host access</h2>
+						<p>This controller can instruct Pi to read, modify, and execute on the paired host as your host account.</p>
+						<p class="trust-copy">Project trust follows the host’s saved Pi setting; this mobile app does not auto-approve project resources.</p>
+					</div>
+				</aside>
+
+				<p class="pair-footnote">Pair only with a host you control. Close the host service to end remote access.</p>
+			</section>
+		</main>
+
+		<div id="app-shell" class="app-shell" hidden>
+			<header class="topbar" aria-label="Active agent toolbar">
+				<button id="instance-button" class="instance-button" type="button" aria-haspopup="dialog" aria-controls="instance-sheet">
+					<span id="connection-orb" class="connection-orb" data-state="connecting" aria-hidden="true"></span>
+					<span class="instance-copy">
+						<strong id="instance-label">Choose an agent</strong>
+						<small id="instance-cwd">No active instance</small>
+					</span>
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9 5 5 5-5" /></svg>
+				</button>
+				<div class="topbar-actions">
+					<span id="connection-label" class="connection-label" data-state="connecting">Connecting</span>
+					<button id="more-button" class="icon-button" type="button" aria-label="Open controls" aria-haspopup="dialog" aria-controls="controls-sheet">
+						<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
+					</button>
+				</div>
+			</header>
+
+			<div id="offline-banner" class="offline-banner" hidden role="status">
+				<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.9 4.9 19.1 19.1M8.5 8.5A9.8 9.8 0 0 1 21 10.8M3 10.8a12.7 12.7 0 0 1 2.6-2M6.5 14.3a7.8 7.8 0 0 1 5.5-2.2c1 0 2 .2 2.9.5M10 17.7a3 3 0 0 1 4 0M12 21h.01" /></svg>
+				<span><strong>Connection lost.</strong> Drafts stay on this iPhone; reconnecting automatically.</span>
+				<button id="retry-button" type="button">Retry</button>
+			</div>
+
+			<section id="main-content" class="console-panel" aria-label="Pi agent conversation">
+				<div id="session-ribbon" class="session-ribbon">
+					<div>
+						<span id="session-state">Ready</span>
+						<span aria-hidden="true">·</span>
+						<span id="session-name">Unsaved session</span>
+					</div>
+					<span id="queue-count" class="queue-count" hidden>0 queued</span>
+				</div>
+
+				<div id="extension-widget-above" class="extension-widget" hidden></div>
+
+				<div id="transcript" class="transcript" tabindex="0" aria-label="Conversation transcript">
+					<section id="empty-state" class="empty-state">
+						<div class="empty-orbit" aria-hidden="true">
+							<span></span><span></span><span></span>
+						</div>
+						<p class="eyebrow">Pi is within reach</p>
+						<h2>What should we build?</h2>
+						<p>Send a task, steer a running agent, or open the RPC shell for a single non-interactive command.</p>
+						<div class="prompt-suggestions">
+							<button type="button" data-suggestion="Audit this project and summarize the highest-impact improvements.">
+								<span>Audit the project</span><small>Find the strongest next move</small>
+							</button>
+							<button type="button" data-suggestion="Run the focused checks for my current changes and explain any failures.">
+								<span>Check my changes</span><small>Run focused validation</small>
+							</button>
+						</div>
+					</section>
+				</div>
+
+				<button id="jump-latest" class="jump-latest" type="button" hidden>
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" /></svg>
+					Latest
+				</button>
+
+				<div id="extension-widget-below" class="extension-widget" hidden></div>
+			</section>
+
+			<section class="composer-dock" aria-label="Message composer">
+				<div id="mode-strip" class="mode-strip" role="tablist" aria-label="Send mode">
+					<button id="mode-prompt" type="button" role="tab" aria-selected="true" data-mode="prompt">Prompt</button>
+					<button id="mode-steer" type="button" role="tab" aria-selected="false" data-mode="steer">Steer</button>
+					<button id="mode-follow-up" type="button" role="tab" aria-selected="false" data-mode="follow_up">Follow-up</button>
+					<button id="mode-shell" type="button" role="tab" aria-selected="false" data-mode="bash">Shell</button>
+				</div>
+
+				<div id="shell-notice" class="shell-notice" hidden>
+					<strong>RPC shell — non-interactive</strong>
+					<span>Runs one command on the host. No PTY, prompts, or full-screen programs.</span>
+				</div>
+
+				<div id="attachment-rail" class="attachment-rail" hidden role="group" aria-label="Image attachments"></div>
+
+				<div class="composer">
+					<textarea
+						id="composer-input"
+						rows="1"
+						placeholder="Message Pi…"
+						aria-label="Message Pi"
+						aria-describedby="composer-hint"
+					></textarea>
+					<div class="composer-actions">
+						<div class="composer-tools">
+							<label class="icon-button attach-button" aria-label="Attach images">
+								<input id="image-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple />
+								<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+							</label>
+							<button id="commands-button" class="icon-button" type="button" aria-label="Open commands" aria-haspopup="dialog" aria-controls="commands-sheet">
+								<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-4 5 4 5M13 17h7" /></svg>
+							</button>
+						</div>
+						<div class="send-cluster">
+							<button id="abort-button" class="abort-button" type="button" hidden>
+								<span class="stop-square" aria-hidden="true"></span>
+								Abort
+							</button>
+							<button id="send-button" class="send-button" type="button" aria-label="Send prompt" disabled>
+								<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 12 6-6 6 6M12 7v11" /></svg>
+							</button>
+						</div>
+					</div>
+				</div>
+				<p id="composer-hint" class="composer-hint">Return adds a line · Command/Control–Return sends</p>
+
+				<div class="runtime-controls">
+					<button id="model-button" type="button" aria-haspopup="dialog" aria-controls="model-sheet">
+						<span class="control-label">Model</span>
+						<strong id="model-label">Loading…</strong>
+						<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9 5 5 5-5" /></svg>
+					</button>
+					<button id="thinking-button" type="button" aria-haspopup="dialog" aria-controls="thinking-sheet">
+						<span class="control-label">Thinking</span>
+						<strong id="thinking-label">—</strong>
+						<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9 5 5 5-5" /></svg>
+					</button>
+				</div>
+			</section>
+
+			<nav class="bottom-nav" aria-label="Primary">
+				<button type="button" data-nav="chat" aria-current="page">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v11H9l-4 3V5Z" /></svg>
+					<span>Chat</span>
+				</button>
+				<button type="button" data-nav="shell">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 7 5 5-5 5M13 17h6" /></svg>
+					<span>Shell</span>
+				</button>
+				<button type="button" data-nav="agents" aria-haspopup="dialog" aria-controls="instance-sheet">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M8 9h8M8 13h5M8 17h3" /></svg>
+					<span>Agents</span>
+				</button>
+				<button type="button" data-nav="controls" aria-haspopup="dialog" aria-controls="controls-sheet">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4" /></svg>
+					<span>Controls</span>
+				</button>
+			</nav>
+		</div>
+
+		<div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
+
+		<dialog id="instance-sheet" class="sheet">
+			<div class="sheet-grabber" aria-hidden="true"></div>
+			<header class="sheet-header" aria-label="Agents sheet header">
+				<div><p class="eyebrow">Host processes</p><h2>Agents</h2></div>
+				<button class="icon-button sheet-close" type="button" aria-label="Close">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+				</button>
+			</header>
+			<div id="instance-list" class="instance-list"></div>
+			<form id="spawn-form" class="spawn-form">
+				<div class="fixed-workspace">
+					<span>Host workspace</span>
+					<code id="spawn-workspace">Loaded after pairing</code>
+				</div>
+				<label for="spawn-cwd">Agent label <span class="optional-label">(optional)</span></label>
+				<div>
+					<input id="spawn-cwd" type="text" value="" placeholder="iPhone session" autocomplete="off" maxlength="128" />
+					<button type="submit">Start</button>
+				</div>
+				<p>The host workspace is fixed; this mobile controller cannot change it.</p>
+			</form>
+		</dialog>
+
+		<dialog id="commands-sheet" class="sheet">
+			<div class="sheet-grabber" aria-hidden="true"></div>
+			<header class="sheet-header" aria-label="Commands sheet header">
+				<div><p class="eyebrow">Current agent</p><h2>Commands</h2></div>
+				<button class="icon-button sheet-close" type="button" aria-label="Close">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+				</button>
+			</header>
+			<label class="search-field">
+				<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></svg>
+				<span class="sr-only">Search commands</span>
+				<input id="command-search" type="search" placeholder="Search commands" autocomplete="off" />
+			</label>
+			<div id="command-list" class="command-list"></div>
+		</dialog>
+
+		<dialog id="model-sheet" class="sheet option-sheet">
+			<div class="sheet-grabber" aria-hidden="true"></div>
+			<header class="sheet-header" aria-label="Model sheet header">
+				<div><p class="eyebrow">Current agent</p><h2>Choose model</h2></div>
+				<button class="icon-button sheet-close" type="button" aria-label="Close">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+				</button>
+			</header>
+			<div id="model-list" class="option-list"></div>
+		</dialog>
+
+		<dialog id="thinking-sheet" class="sheet option-sheet">
+			<div class="sheet-grabber" aria-hidden="true"></div>
+			<header class="sheet-header" aria-label="Thinking sheet header">
+				<div><p class="eyebrow">Reasoning budget</p><h2>Thinking level</h2></div>
+				<button class="icon-button sheet-close" type="button" aria-label="Close">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+				</button>
+			</header>
+			<div id="thinking-list" class="option-list"></div>
+		</dialog>
+
+		<dialog id="controls-sheet" class="sheet">
+			<div class="sheet-grabber" aria-hidden="true"></div>
+			<header class="sheet-header" aria-label="Controls sheet header">
+				<div><p class="eyebrow">Pi Pocket</p><h2>Controls</h2></div>
+				<button class="icon-button sheet-close" type="button" aria-label="Close">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+				</button>
+			</header>
+			<div class="control-menu">
+				<button id="new-session-button" type="button"><span><strong>New session</strong><small>Start a clean conversation</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></button>
+				<button id="refresh-button" type="button"><span><strong>Refresh state</strong><small>Reload agent state and messages</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></button>
+				<button id="install-button" type="button" hidden><span><strong>Add to Home Screen</strong><small>Install the app on this iPhone</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></button>
+			</div>
+			<aside class="access-warning compact" aria-labelledby="controls-access-title">
+				<div class="warning-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4L12 3Z" /><path d="M12 9v5" /><circle cx="12" cy="17" r=".8" /></svg></div>
+				<div><h3 id="controls-access-title">Full host access</h3><p>Commands act with the paired host account’s permissions. This is an RPC controller, not a sandbox or raw terminal.</p></div>
+			</aside>
+		</dialog>
+
+		<dialog id="extension-dialog" class="extension-dialog">
+			<form id="extension-form" method="dialog">
+				<header aria-label="Extension request header">
+					<div><p class="eyebrow">Extension request</p><h2 id="extension-title">Input required</h2></div>
+					<button id="extension-cancel-x" class="icon-button" type="button" aria-label="Cancel request">
+						<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+					</button>
+				</header>
+				<p id="extension-message"></p>
+				<div id="extension-fields"></div>
+				<div class="dialog-actions">
+					<button id="extension-cancel" class="secondary-button" type="button">Cancel</button>
+					<button id="extension-submit" class="primary-button" type="submit">Continue</button>
+				</div>
+			</form>
+		</dialog>
+
+		<template id="message-template">
+			<article class="message">
+				<header><span class="message-author"></span><time></time></header>
+				<div class="message-body"></div>
+			</article>
+		</template>
+		<template id="tool-template">
+			<details class="tool-card">
+				<summary>
+					<span class="tool-state" aria-hidden="true"></span>
+					<span class="tool-copy"><strong></strong><small></small></span>
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9 5 5 5-5" /></svg>
+				</summary>
+				<pre><code></code></pre>
+			</details>
+		</template>
+
+		<noscript>Pi Pocket Console requires JavaScript to connect to the host.</noscript>
+		<script src="/app.js" defer></script>
+	</body>
+</html>

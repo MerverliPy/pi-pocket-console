@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+	<title id="title">Pi Pocket Console</title>
+	<defs>
+		<linearGradient id="background" x1="54" y1="32" x2="458" y2="486" gradientUnits="userSpaceOnUse">
+			<stop stop-color="#11191e" />
+			<stop offset="0.52" stop-color="#080c0f" />
+			<stop offset="1" stop-color="#050708" />
+		</linearGradient>
+		<radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(356 112) rotate(126) scale(352)">
+			<stop stop-color="#36c9c5" stop-opacity="0.28" />
+			<stop offset="0.48" stop-color="#1b8482" stop-opacity="0.09" />
+			<stop offset="1" stop-color="#080b0e" stop-opacity="0" />
+		</radialGradient>
+		<linearGradient id="tile" x1="95" y1="72" x2="424" y2="454" gradientUnits="userSpaceOnUse">
+			<stop stop-color="#1a292f" />
+			<stop offset="0.5" stop-color="#11191e" />
+			<stop offset="1" stop-color="#0c1115" />
+		</linearGradient>
+		<linearGradient id="mark" x1="146" y1="126" x2="405" y2="421" gradientUnits="userSpaceOnUse">
+			<stop stop-color="#9afff7" />
+			<stop offset="0.45" stop-color="#63e6df" />
+			<stop offset="1" stop-color="#31b7b4" />
+		</linearGradient>
+		<pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+			<path d="M32 0H0v32" fill="none" stroke="#d6eef6" stroke-opacity="0.035" stroke-width="1" />
+		</pattern>
+	</defs>
+
+	<rect width="512" height="512" fill="url(#background)" />
+	<rect width="512" height="512" fill="url(#glow)" />
+	<rect width="512" height="512" fill="url(#grid)" />
+
+	<rect x="58" y="70" width="396" height="396" rx="124" fill="#000000" fill-opacity="0.28" />
+	<g>
+		<rect x="52" y="52" width="408" height="408" rx="128" fill="url(#tile)" />
+		<rect
+			x="53"
+			y="53"
+			width="406"
+			height="406"
+			rx="127"
+			fill="none"
+			stroke="#91fff6"
+			stroke-opacity="0.19"
+			stroke-width="2"
+		/>
+		<path
+			d="M130 112h148c78 0 141 63 141 141s-63 141-141 141h-60v62h-88V112Z"
+			fill="url(#mark)"
+		/>
+		<path d="M218 198h57c32 0 57 25 57 56s-25 56-57 56h-57V198Z" fill="#11191e" />
+		<circle cx="382" cy="112" r="34" fill="#91fff6" />
+		<circle cx="382" cy="112" r="17" fill="#63e6df" />
+	</g>
+
+	<path d="M88 173v-39a46 46 0 0 1 46-46h38" fill="none" stroke="#91fff6" stroke-opacity="0.2" stroke-width="3" />
+	<circle cx="88" cy="185" r="4" fill="#63e6df" fill-opacity="0.62" />
+	<path d="M424 339v39a46 46 0 0 1-46 46h-38" fill="none" stroke="#83b9ff" stroke-opacity="0.16" stroke-width="3" />
+	<circle cx="424" cy="327" r="4" fill="#83b9ff" fill-opacity="0.58" />
+</svg>

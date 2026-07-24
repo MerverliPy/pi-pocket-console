@@ -1,0 +1,45 @@
+{
+	"name": "pi-pocket-console",
+	"version": "0.1.0",
+	"description": "A secure, iPhone-first remote console for the Pi coding agent",
+	"type": "module",
+	"private": true,
+	"bin": {
+		"pi-pocket": "./dist/cli.js"
+	},
+	"files": [
+		"dist",
+		"public",
+		"README.md",
+		"SECURITY.md",
+		"docs",
+		"LICENSE"
+	],
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').chmodSync('dist/cli.js', 0o755)\"",
+		"check": "biome check . && tsc --noEmit && node --check public/app.js && node --check public/sw.js",
+		"dev": "tsx src/cli.ts",
+		"start": "node dist/cli.js",
+		"test": "node --import tsx --test test/*.test.ts"
+	},
+	"dependencies": {
+		"@earendil-works/pi-coding-agent": "0.81.1"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.3.5",
+		"@types/node": "22.19.19",
+		"tsx": "4.22.1",
+		"typescript": "5.9.3"
+	},
+	"engines": {
+		"node": ">=22.19.0"
+	},
+	"license": "MIT",
+	"keywords": [
+		"pi",
+		"coding-agent",
+		"iphone",
+		"pwa",
+		"remote-terminal"
+	]
+}
