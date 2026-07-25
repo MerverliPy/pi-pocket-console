@@ -1,3 +1,12 @@
+function getClientId() {
+	let id = localStorage.getItem("pi-pocket:client-id");
+	if (!id) {
+		id = crypto.randomUUID();
+		localStorage.setItem("pi-pocket:client-id", id);
+	}
+	return id;
+}
+
 const byId = (id) => document.getElementById(id);
 const elements = {
 	abortButton: byId("abort-button"),
@@ -136,6 +145,9 @@ async function api(path, options = {}) {
 	}
 	if ((options.method || "GET") !== "GET" && state.csrfToken) {
 		headers.set("X-CSRF-Token", state.csrfToken);
+	}
+	if ((options.method || "GET") !== "GET") {
+		headers.set("X-Client-Id", getClientId());
 	}
 	request.headers = headers;
 
@@ -341,6 +353,33 @@ async function spawnInstance(event) {
 	}
 }
 
+function clearDrafts() {
+	const keys = [];
+	for (let i = 0; i < localStorage.length; i += 1) {
+		const key = localStorage.key(i);
+		if (key?.startsWith("pi-pocket:draft:")) {
+			keys.push(key);
+		}
+	}
+	if (!keys.length) {
+		toast("No local drafts to clear.", "info", 3000);
+		return;
+	}
+	if (
+		!window.confirm(`Clear ${keys.length} saved draft${keys.length === 1 ? "" : "s"}? This action cannot be undone.`)
+	) {
+		return;
+	}
+	for (const key of keys) {
+		localStorage.removeItem(key);
+	}
+	elements.composer.value = "";
+	autoSizeComposer();
+	updateComposer();
+	announce(`Cleared ${keys.length} draft${keys.length === 1 ? "" : "s"}.`);
+	closeSheets();
+}
+
 async function stopInstance(instanceId) {
 	const instance = state.instances.find((item) => item.id === instanceId);
 	if (!instance || !window.confirm(`Stop ${instanceName(instance)}? Its live process will end.`)) {
@@ -361,7 +400,8 @@ async function stopInstance(instanceId) {
 		renderInstances();
 		announce(`${instanceName(instance)} stopped.`);
 	} catch (error) {
-		toast(error.message, "error");
+		const suffix = error.status === 409 ? " Another device has control." : "";
+		toast(error.message + suffix, "error");
 	}
 }
 
@@ -444,7 +484,7 @@ async function rpc(command, { quiet = false } = {}) {
 		return data.response;
 	} catch (error) {
 		if (error.status === 409) {
-			setConnection("error", "In use");
+			setConnection("error", "Controlled by another device");
 		}
 		if (!quiet) {
 			toast(error.message, "error");
@@ -1571,6 +1611,9 @@ function bindEvents() {
 	byId("refresh-button").addEventListener("click", () => {
 		closeSheets();
 		void refreshInstance();
+	});
+	byId("clear-drafts-button").addEventListener("click", () => {
+		clearDrafts();
 	});
 	byId("new-session-button").addEventListener("click", async () => {
 		if (!window.confirm("Start a new Pi session? The current session remains on the host.")) {

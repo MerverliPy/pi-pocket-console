@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -299,5 +299,26 @@ describe("instance startup cleanup", () => {
 		const manager = new InstanceManager("/nonexistent-workspace");
 		await assert.rejects(manager.spawn("test-fail"));
 		assert.equal(manager.list().length, 0);
+	});
+
+	test("RPC process errors contain errorId but no raw stderr in public message", async () => {
+		const dir = join(tmpdir(), "pi-rpc-error-redact-test");
+		mkdirSync(dir, { recursive: true });
+		const rpcScript = join(dir, "rpc-shim.js");
+		writeFileSync(rpcScript, `process.stderr.write("secret-key=abc123\\n");setTimeout(()=>{}, 200);`);
+		const proc = new PocketRpcProcess(dir, 100, rpcScript);
+
+		await assert.rejects(proc.send({ type: "get_state" }), (error: Error) => {
+			assert.doesNotMatch(error.message, /secret-key/);
+			assert.doesNotMatch(error.message, /stderr/i);
+			return true;
+		});
+
+		const detail = proc.processErrorDetail;
+		assert.ok(detail);
+		assert.match(detail.message, /exited/);
+		assert.ok(detail.stderr);
+
+		await rm(dir, { recursive: true, force: true });
 	});
 });

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import type { RpcCommand, RpcExtensionUIResponse } from "@earendil-works/pi-coding-agent";
 import { AuthManager, PairingError } from "./auth.ts";
 import { ControllerLeases } from "./controller-lease.ts";
+import { DebugLog } from "./debug-log.ts";
 import { type InstanceController, InstanceManager, type InstanceSummary } from "./instance-manager.ts";
 
 const DEFAULT_HOST = "127.0.0.1";
@@ -22,6 +23,8 @@ const MAX_SSE_CLIENT_BUFFER_BYTES = 1024 * 1024;
 const MAX_SSE_CLIENTS_PER_SESSION = 3;
 const DEFAULT_MAX_INSTANCES = 1;
 const API_WINDOW_MS = 60_000;
+const CLIENT_ID_HEADER = "x-client-id";
+const MAX_CLIENT_ID_LENGTH = 128;
 const API_MAX_REQUESTS = 120;
 const ALLOWED_IMAGE_TYPES: ReadonlySet<string> = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"]);
 const SECURITY_HEADERS: Readonly<Record<string, string>> = {
@@ -125,7 +128,8 @@ interface EventEntry {
 
 interface StreamClient {
 	response: ServerResponse;
-	owner: string;
+	sessionId: string;
+	clientId: string;
 }
 
 interface InstanceStream {
@@ -149,17 +153,17 @@ class StreamHub {
 			for (const [instanceId, stream] of this.streams) {
 				for (const client of stream.clients) {
 					if (
-						!this.isOwnerActive(client.owner) ||
+						!this.isOwnerActive(client.sessionId) ||
 						client.response.destroyed ||
 						client.response.writableEnded ||
 						client.response.writableLength > MAX_SSE_CLIENT_BUFFER_BYTES
 					) {
 						client.response.end();
 						stream.clients.delete(client);
-						this.leases.release(instanceId, client.owner);
+						this.leases.release(instanceId, client.sessionId, client.clientId);
 						continue;
 					}
-					this.leases.claim(instanceId, client.owner);
+					this.leases.claim(instanceId, client.sessionId, client.clientId);
 					client.response.write(": keepalive\n\n");
 				}
 			}
@@ -167,11 +171,11 @@ class StreamHub {
 		this.keepAliveTimer.unref();
 	}
 
-	checkOwnerLimit(owner: string): void {
+	checkOwnerLimit(sessionId: string): void {
 		let count = 0;
 		for (const stream of this.streams.values()) {
 			for (const client of stream.clients) {
-				if (client.owner === owner) {
+				if (client.sessionId === sessionId) {
 					count += 1;
 					if (count >= MAX_SSE_CLIENTS_PER_SESSION) {
 						throw new HttpError("Too many event stream connections", 429, "too_many_streams");
@@ -183,7 +187,8 @@ class StreamHub {
 
 	attach(
 		instance: InstanceSummary,
-		owner: string,
+		sessionId: string,
+		clientId: string,
 		response: ServerResponse,
 		lastEventId: number | undefined,
 	): () => void {
@@ -232,7 +237,7 @@ class StreamHub {
 			this.streams.set(instance.id, stream);
 		}
 
-		const client = { response, owner };
+		const client = { response, sessionId, clientId };
 		stream.clients.add(client);
 		writeSse(response, undefined, "snapshot", { type: "instance_snapshot", instance });
 		if (lastEventId !== undefined) {
@@ -259,16 +264,16 @@ class StreamHub {
 		this.streams.delete(instanceId);
 	}
 
-	closeOwner(owner: string): void {
+	closeOwner(sessionId: string): void {
 		for (const [instanceId, stream] of this.streams) {
 			for (const client of stream.clients) {
-				if (client.owner !== owner) {
+				if (client.sessionId !== sessionId) {
 					continue;
 				}
 				client.response.end();
 				stream.clients.delete(client);
 			}
-			this.leases.release(instanceId, owner);
+			this.leases.release(instanceId, sessionId);
 		}
 	}
 
@@ -310,6 +315,43 @@ function optionalString(value: unknown, name: string, maxLength = 262_144): stri
 	return requireString(value, name, maxLength);
 }
 
+const CLIENT_ID_RE = /^[A-Za-z0-9_-]+$/;
+
+function requireClientId(request: IncomingMessage): string {
+	const value = request.headers[CLIENT_ID_HEADER];
+	if (
+		typeof value !== "string" ||
+		value.length === 0 ||
+		value.length > MAX_CLIENT_ID_LENGTH ||
+		!CLIENT_ID_RE.test(value)
+	) {
+		throw new HttpError("Client ID is required", 400, "client_id_required");
+	}
+	return value;
+}
+
+const IMAGE_SIGNATURES: Record<string, Readonly<{ offset: number; bytes: Uint8Array }>> = {
+	"image/jpeg": { offset: 0, bytes: new Uint8Array([0xff, 0xd8, 0xff]) },
+	"image/png": { offset: 0, bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) },
+	"image/gif": { offset: 0, bytes: new Uint8Array([0x47, 0x49, 0x46, 0x38]) },
+	"image/webp": { offset: 8, bytes: new Uint8Array([0x57, 0x45, 0x42, 0x50]) },
+};
+
+function validateImageSignature(mimeType: string, decoded: Buffer): void {
+	const sig = IMAGE_SIGNATURES[mimeType];
+	if (!sig) {
+		return;
+	}
+	if (decoded.length < sig.offset + sig.bytes.length) {
+		throw new HttpError("Image content does not match declared type", 400, "invalid_images");
+	}
+	for (let i = 0; i < sig.bytes.length; i += 1) {
+		if (decoded[sig.offset + i] !== sig.bytes[i]) {
+			throw new HttpError("Image content does not match declared type", 400, "invalid_images");
+		}
+	}
+}
+
 function validateImages(value: unknown): void {
 	if (value === undefined) {
 		return;
@@ -341,6 +383,13 @@ function validateImages(value: unknown): void {
 		if (totalBytes > MAX_TOTAL_IMAGE_BYTES) {
 			throw new HttpError("Combined image payload is too large", 413, "images_too_large");
 		}
+		let decoded: Buffer;
+		try {
+			decoded = Buffer.from(image.data as string, "base64");
+		} catch {
+			throw new HttpError("Image content does not match declared type", 400, "invalid_images");
+		}
+		validateImageSignature(image.mimeType as string, decoded);
 	}
 }
 
@@ -629,7 +678,8 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 	const maxInstances = options.maxInstances ?? DEFAULT_MAX_INSTANCES;
 	const secureCookie = !localInsecure;
 	const auth = new AuthManager(secureCookie);
-	const controller = options.instanceController ?? new InstanceManager(workspaceRoot, maxInstances);
+	const debugLog = new DebugLog();
+	const controller = options.instanceController ?? new InstanceManager(workspaceRoot, maxInstances, debugLog);
 	const leases = new ControllerLeases(options.controllerLeaseMs);
 	const streamHub = new StreamHub(controller, leases, (owner) => auth.isSessionActive(owner));
 	const bodyLimit = options.bodyLimitBytes ?? DEFAULT_BODY_LIMIT;
@@ -721,6 +771,11 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 					});
 					return;
 				}
+				if (pathname === "/api/debug/logs" && method === "GET") {
+					const afterId = new URL(request.url ?? "/", expectedOrigin).searchParams.get("after") ?? undefined;
+					sendJson(response, 200, { entries: debugLog.entriesSince(afterId) });
+					return;
+				}
 				if (pathname === "/api/instances" && method === "GET") {
 					sendJson(response, 200, { instances: controller.list() });
 					return;
@@ -760,15 +815,20 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 					return;
 				}
 				if (instanceRoute.action === "stop" && method === "POST") {
+					const clientId = requireClientId(request);
+					if (!leases.claim(instance.id, session.id, clientId)) {
+						throw new HttpError("Another controller currently owns this instance", 409, "controller_in_use");
+					}
 					const stopped = await controller.stop(instance.id);
 					streamHub.closeInstance(instance.id);
-					leases.release(instance.id);
+					leases.release(instance.id, session.id, clientId);
 					sendJson(response, 200, { instance: stopped });
 					return;
 				}
 				if (instanceRoute.action === "events" && method === "GET") {
+					const clientId = requireClientId(request);
 					streamHub.checkOwnerLimit(session.id);
-					if (!leases.claim(instance.id, session.id)) {
+					if (!leases.claim(instance.id, session.id, clientId)) {
 						throw new HttpError("Another controller currently owns this instance", 409, "controller_in_use");
 					}
 					response.statusCode = 200;
@@ -781,12 +841,13 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 					const rawLastEventId = request.headers["last-event-id"];
 					const parsedLastEventId =
 						typeof rawLastEventId === "string" && /^\d+$/.test(rawLastEventId) ? Number(rawLastEventId) : undefined;
-					const detach = streamHub.attach(instance, session.id, response, parsedLastEventId);
+					const detach = streamHub.attach(instance, session.id, clientId, response, parsedLastEventId);
 					response.once("close", detach);
 					return;
 				}
 				if ((instanceRoute.action === "messages" || instanceRoute.action === "commands") && method === "POST") {
-					if (!leases.claim(instance.id, session.id)) {
+					const clientId = requireClientId(request);
+					if (!leases.claim(instance.id, session.id, clientId)) {
 						throw new HttpError("Another controller currently owns this instance", 409, "controller_in_use");
 					}
 					const body = await readJson(request, bodyLimit);
@@ -815,7 +876,8 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 					return;
 				}
 				if (instanceRoute.action === "ui-responses" && method === "POST") {
-					if (!leases.claim(instance.id, session.id)) {
+					const clientId = requireClientId(request);
+					if (!leases.claim(instance.id, session.id, clientId)) {
 						throw new HttpError("Another controller currently owns this instance", 409, "controller_in_use");
 					}
 					const body = await readJson(request, bodyLimit);
@@ -848,8 +910,10 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 				sendJson(response, error.status, { error: error.message, code: error.code }, error.headers);
 				return;
 			}
-			console.error(error instanceof Error ? error.message : String(error));
-			sendJson(response, 500, { error: "Internal server error", code: "internal_error" });
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			const errorId = debugLog.add("error", "Internal server error", errorMessage);
+			console.error(`[${errorId}] Internal server error`);
+			sendJson(response, 500, { error: "Internal server error", code: "internal_error", errorId });
 		}
 	};
 

@@ -14,6 +14,7 @@ export type RpcOutboundMessage = AgentSessionEvent | RpcExtensionUIRequest | Rpc
 const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
 const MAX_LINE_LENGTH = 1_048_576;
 const MAX_BUFFER_SIZE = 8 * MAX_LINE_LENGTH;
+const MAX_STDERR_BYTES = 16_384;
 
 interface PendingRequest {
 	resolve(response: RpcResponse): void;
@@ -29,6 +30,14 @@ function isMinimalRpcResponse(value: unknown): value is { type: string; id?: str
 	return typeof value === "object" && value !== null && typeof (value as Record<string, unknown>).type === "string";
 }
 
+export interface ProcessErrorDetail {
+	errorId: string;
+	message: string;
+	stderr: string;
+	code?: number | null;
+	signal?: string | null;
+}
+
 export class PocketRpcProcess {
 	readonly child: ChildProcess;
 
@@ -38,12 +47,14 @@ export class PocketRpcProcess {
 	private nextRequestId = 0;
 	private stdoutBuffer = "";
 	private stderrBuffer = "";
+	private readonly processId: string;
 	private readonly commandTimeoutMs: number;
 	private readonly pendingRequests = new Map<string, PendingRequest>();
 	private readonly messageListeners = new Set<(message: RpcOutboundMessage) => void>();
 	private readonly exitListeners = new Set<(error?: Error) => void>();
 
 	constructor(cwd: string, commandTimeoutMs?: number, entryPath?: string) {
+		this.processId = randomUUID().slice(0, 8);
 		this.commandTimeoutMs = commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS;
 		this.child = spawn(process.execPath, [entryPath ?? resolveRpcEntryPath()], {
 			cwd,
@@ -56,11 +67,27 @@ export class PocketRpcProcess {
 		this.attachListeners();
 	}
 
+	get processErrorDetail(): ProcessErrorDetail | undefined {
+		if (this.stderrBuffer || this.exited) {
+			const stderr = this.stderrBuffer.trim();
+			const code = this.child.exitCode;
+			const signal = this.child.signalCode;
+			return {
+				errorId: this.processId,
+				message: `Pi RPC process exited (pid=${this.child.pid}, code=${code}, signal=${signal})`,
+				stderr,
+				code,
+				signal,
+			};
+		}
+		return undefined;
+	}
+
 	private attachListeners(): void {
 		this.child.stdout?.setEncoding("utf8");
 		this.child.stdout?.on("data", (chunk: string) => {
 			if (this.stdoutBuffer.length + chunk.length > MAX_BUFFER_SIZE) {
-				this.handleExit(new Error("Pi RPC stdout buffer exceeded maximum size"));
+				this.handleExit(new Error("Pi RPC stdout buffer too large"));
 				this.child.kill("SIGTERM");
 				return;
 			}
@@ -73,7 +100,7 @@ export class PocketRpcProcess {
 				const line = this.stdoutBuffer.slice(0, newlineIndex);
 				this.stdoutBuffer = this.stdoutBuffer.slice(newlineIndex + 1);
 				if (line.length > MAX_LINE_LENGTH) {
-					this.handleExit(new Error(`Pi RPC emitted a line exceeding ${MAX_LINE_LENGTH} bytes`));
+					this.handleExit(new Error("Pi RPC emitted an oversized line"));
 					this.child.kill("SIGTERM");
 					return;
 				}
@@ -86,30 +113,24 @@ export class PocketRpcProcess {
 
 		this.child.stderr?.setEncoding("utf8");
 		this.child.stderr?.on("data", (chunk: string) => {
-			this.stderrBuffer = `${this.stderrBuffer}${chunk}`.slice(-16_384);
+			this.stderrBuffer = `${this.stderrBuffer}${chunk}`.slice(-MAX_STDERR_BYTES);
 		});
 
-		this.child.once("error", (error) => {
-			this.handleExit(new Error(`Pi RPC process error: ${error.message}${this.stderrSuffix()}`));
+		this.child.once("error", (_error) => {
+			this.handleExit(new Error(`Pi RPC process error (pid=${this.child.pid})`));
 		});
 		this.child.once("exit", (code, signal) => {
-			this.handleExit(new Error(`Pi RPC process exited (code=${code} signal=${signal})${this.stderrSuffix()}`));
+			const publicMsg = `Pi RPC process exited (code=${code}, signal=${signal})`;
+			this.handleExit(new Error(publicMsg));
 		});
-	}
-
-	private stderrSuffix(): string {
-		const stderr = this.stderrBuffer.trim();
-		return stderr ? `. Stderr: ${stderr}` : "";
 	}
 
 	private handleLine(line: string): void {
 		let parsed: unknown;
 		try {
 			parsed = JSON.parse(line);
-		} catch (error) {
-			this.handleExit(
-				new Error(`Pi RPC emitted invalid JSON: ${error instanceof Error ? error.message : String(error)}`),
-			);
+		} catch (_error) {
+			this.handleExit(new Error("Pi RPC emitted invalid JSON"));
 			this.child.kill("SIGTERM");
 			return;
 		}
@@ -159,14 +180,14 @@ export class PocketRpcProcess {
 
 	send(command: RpcCommand): Promise<RpcResponse> {
 		if (this.exited) {
-			return Promise.reject(new Error(`Pi RPC process is not running${this.stderrSuffix()}`));
+			return Promise.reject(new Error(`Pi RPC process is not running (errorId=${this.processId})`));
 		}
 		const id = command.id ?? `pocket_${++this.nextRequestId}_${randomUUID()}`;
 		const fullCommand = { ...command, id };
 		return new Promise<RpcResponse>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				if (this.pendingRequests.delete(id)) {
-					reject(new Error(`Command "${command.type}" timed out after ${this.commandTimeoutMs}ms (id=${id})`));
+					reject(new Error(`Command "${command.type}" timed out (errorId=${this.processId})`));
 				}
 			}, this.commandTimeoutMs);
 			timer.unref();
@@ -188,7 +209,7 @@ export class PocketRpcProcess {
 
 	sendUiResponse(response: RpcExtensionUIResponse): void {
 		if (this.exited) {
-			throw new Error(`Pi RPC process is not running${this.stderrSuffix()}`);
+			throw new Error(`Pi RPC process is not running (errorId=${this.processId})`);
 		}
 		this.child.stdin?.write(`${JSON.stringify(response)}\n`);
 	}

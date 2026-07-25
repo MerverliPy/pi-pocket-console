@@ -1,5 +1,6 @@
 interface Lease {
-	owner: string;
+	sessionId: string;
+	clientId: string;
 	expiresAt: number;
 }
 
@@ -8,19 +9,31 @@ export class ControllerLeases {
 
 	constructor(private readonly ttlMs = 45_000) {}
 
-	claim(instanceId: string, owner: string, now = Date.now()): boolean {
+	claim(instanceId: string, sessionId: string, clientId: string, now = Date.now()): boolean {
 		const current = this.leases.get(instanceId);
-		if (current && current.owner !== owner && current.expiresAt > now) {
-			return false;
+		if (current) {
+			if (current.sessionId === sessionId && current.clientId === clientId) {
+			} else if (current.expiresAt > now) {
+				return false;
+			}
 		}
-		this.leases.set(instanceId, { owner, expiresAt: now + this.ttlMs });
+		this.leases.set(instanceId, { sessionId, clientId, expiresAt: now + this.ttlMs });
 		return true;
 	}
 
-	release(instanceId: string, owner?: string): void {
+	release(instanceId: string, sessionId?: string, clientId?: string): void {
 		const current = this.leases.get(instanceId);
-		if (!current || (owner !== undefined && current.owner !== owner)) {
+		if (!current) {
 			return;
+		}
+		if (sessionId !== undefined && clientId !== undefined) {
+			if (current.sessionId !== sessionId || current.clientId !== clientId) {
+				return;
+			}
+		} else if (sessionId !== undefined) {
+			if (current.sessionId !== sessionId) {
+				return;
+			}
 		}
 		this.leases.delete(instanceId);
 	}

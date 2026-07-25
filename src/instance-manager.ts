@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RpcCommand, RpcExtensionUIResponse, RpcResponse } from "@earendil-works/pi-coding-agent";
+import type { DebugLog } from "./debug-log.ts";
 import { PocketRpcProcess, type RpcOutboundMessage } from "./rpc-process.ts";
 
 export type InstanceStatus = "starting" | "online" | "stopping" | "stopped" | "error";
@@ -48,6 +49,7 @@ export class InstanceManager implements InstanceController {
 	constructor(
 		private readonly workspaceRoot: string,
 		private readonly maxInstances: number = 1,
+		private readonly debugLog?: DebugLog,
 	) {}
 
 	private update(live: LiveInstance, updates: Partial<InstanceSummary>): void {
@@ -110,16 +112,22 @@ export class InstanceManager implements InstanceController {
 				}
 				this.publish(live, message);
 			});
-			live.unsubscribeExit = rpcProcess.onExit((error) => {
+			live.unsubscribeExit = rpcProcess.onExit((_error) => {
 				if (live.record.status === "stopping" || live.record.status === "stopped") {
 					return;
 				}
 				this.update(live, { status: "error" });
+				const detail = rpcProcess.processErrorDetail;
+				const errorId = detail?.errorId ?? "unknown";
+				const publicError = `Agent process ended (errorId=${errorId})`;
+				if (this.debugLog && detail) {
+					this.debugLog.add("error", publicError, detail.message + (detail.stderr ? `\nStderr: ${detail.stderr}` : ""));
+				}
 				this.publish(live, {
 					type: "instance_status",
 					instanceId: live.record.id,
 					status: "error",
-					error: error?.message,
+					error: publicError,
 				});
 			});
 

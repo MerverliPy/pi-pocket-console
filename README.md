@@ -91,7 +91,7 @@ loopback and is intentionally unsuitable for remote iPhone access.
 | Rich input | Image prompts and Pi extension confirmation, select, input, and editor dialogs |
 | Shell | Streamed Pi RPC `bash` execution; non-interactive and not a PTY |
 | Instances | One Pi RPC child per live instance, always started in the configured workspace, with a configurable capacity cap (default 1) |
-| Control | A renewable single-controller lease prevents two devices from driving one instance at once |
+| Control | A renewable per-client lease (session + browser profile) prevents two devices from driving one instance at once |
 | Offline behavior | App-shell availability and local draft preservation; commands never execute offline |
 | Credentials | Provider credentials and Pi configuration remain on the host |
 
@@ -138,6 +138,9 @@ Treat access to Pi Pocket Console like shell access to the host:
 - iOS background suspension may interrupt the event stream. The app reconnects
   and reconciles state when foregrounded, but a stopped gateway cannot wake a
   sleeping host.
+- Browser drafts (saved message text in localStorage) may contain sensitive
+  prompts. They are stored only on the device and are never synchronized to
+  the host. Clear them from the Controls menu.
 - The service worker caches only the public app shell—not API responses,
   transcripts, tool output, pairing data, or provider credentials.
 

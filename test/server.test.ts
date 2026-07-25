@@ -9,6 +9,8 @@ import { ControllerLeases } from "../src/controller-lease.ts";
 import type { InstanceController, InstanceSummary, PocketStreamMessage } from "../src/instance-manager.ts";
 import { type PocketServer, type PocketServerOptions, startPocketServer } from "../src/server.ts";
 
+const TEST_CLIENT_ID = "test-client";
+
 interface ResponseResult {
 	status: number;
 	headers: Record<string, string | string[] | undefined>;
@@ -140,6 +142,7 @@ async function openEventStream(
 	instanceId: string,
 	cookie: string,
 	lastEventId?: number,
+	clientId?: string,
 ): Promise<{
 	request: ClientRequest;
 	response: IncomingMessage;
@@ -154,6 +157,7 @@ async function openEventStream(
 				headers: {
 					Cookie: cookie,
 					...(lastEventId === undefined ? {} : { "Last-Event-ID": String(lastEventId) }),
+					...(clientId ? { "X-Client-Id": clientId } : {}),
 				},
 			},
 			(response) => {
@@ -203,6 +207,7 @@ async function request(
 		csrf?: string;
 		origin?: string;
 		body?: unknown;
+		clientId?: string;
 	},
 ): Promise<ResponseResult> {
 	const body = options.body === undefined ? undefined : JSON.stringify(options.body);
@@ -220,6 +225,7 @@ async function request(
 					...(options.cookie ? { Cookie: options.cookie } : {}),
 					...(options.csrf ? { "X-CSRF-Token": options.csrf } : {}),
 					...(options.origin ? { Origin: options.origin } : {}),
+					...(options.clientId ? { "X-Client-Id": options.clientId } : {}),
 				},
 			},
 			(response) => {
@@ -364,6 +370,7 @@ describe("secure mobile server", () => {
 			origin: server.origin,
 			cookie: auth.cookie,
 			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
 			body: { command: { type: "run_anything", command: "unsafe" } },
 		});
 		assert.equal(unknownCommand.status, 403);
@@ -374,6 +381,7 @@ describe("secure mobile server", () => {
 			origin: server.origin,
 			cookie: auth.cookie,
 			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
 			body: { command: { type: "prompt", message: "Hello" } },
 		});
 		assert.equal(command.status, 200);
@@ -386,6 +394,7 @@ describe("secure mobile server", () => {
 			origin: server.origin,
 			cookie: auth.cookie,
 			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
 			body: { response: { type: "extension_ui_response", id: "dialog-1", confirmed: true } },
 		});
 		assert.equal(uiResponse.status, 202);
@@ -410,13 +419,15 @@ describe("secure mobile server", () => {
 		const instance = spawned.json.instance as InstanceSummary;
 		const commandPath = `/api/instances/${instance.id}/commands`;
 
-		const validImage = { type: "image", data: "aA==", mimeType: "image/jpeg" };
+		const validJpeg = "/9j/"; // FF D8 FF
+		const validImage = { type: "image", data: validJpeg, mimeType: "image/jpeg" };
 		const valid = await request(server, {
 			path: commandPath,
 			method: "POST",
 			origin: server.origin,
 			cookie: auth.cookie,
 			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
 			body: { type: "prompt", message: "Inspect this", images: [validImage], streamingBehavior: "followUp" },
 		});
 		assert.equal(valid.status, 200);
@@ -428,6 +439,7 @@ describe("secure mobile server", () => {
 			origin: server.origin,
 			cookie: auth.cookie,
 			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
 			body: {
 				type: "prompt",
 				message: "Inspect this",
@@ -442,6 +454,7 @@ describe("secure mobile server", () => {
 			origin: server.origin,
 			cookie: auth.cookie,
 			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
 			body: { type: "prompt", message: "Inspect these", images: Array.from({ length: 4 }, () => validImage) },
 		});
 		assert.equal(tooMany.status, 400);
@@ -452,10 +465,11 @@ describe("secure mobile server", () => {
 			origin: server.origin,
 			cookie: auth.cookie,
 			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
 			body: {
 				type: "prompt",
 				message: "Inspect this",
-				images: [{ ...validImage, data: Buffer.alloc(1_500_001).toString("base64") }],
+				images: [{ type: "image", data: `/9j/${Buffer.alloc(1_500_000).toString("base64")}`, mimeType: "image/jpeg" }],
 			},
 		});
 		assert.equal(oversized.status, 413);
@@ -466,6 +480,7 @@ describe("secure mobile server", () => {
 			origin: server.origin,
 			cookie: auth.cookie,
 			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
 			body: { type: "prompt", message: "Hello", streamingBehavior: "immediate" },
 		});
 		assert.equal(invalidStreamingBehavior.status, 400);
@@ -476,6 +491,7 @@ describe("secure mobile server", () => {
 			origin: server.origin,
 			cookie: auth.cookie,
 			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
 			body: { type: "bash", command: "pwd", excludeFromContext: "yes" },
 		});
 		assert.equal(invalidBashFlag.status, 400);
@@ -495,7 +511,7 @@ describe("secure mobile server", () => {
 		});
 		const instance = spawned.json.instance as InstanceSummary;
 
-		const firstStream = await openEventStream(server, instance.id, auth.cookie);
+		const firstStream = await openEventStream(server, instance.id, auth.cookie, undefined, TEST_CLIENT_ID);
 		await firstStream.readUntil(/event: snapshot/);
 		controller.publish(instance.id, {
 			type: "instance_status",
@@ -515,7 +531,7 @@ describe("secure mobile server", () => {
 			status: "online",
 			error: "second",
 		});
-		const resumedStream = await openEventStream(server, instance.id, auth.cookie, 1);
+		const resumedStream = await openEventStream(server, instance.id, auth.cookie, 1, TEST_CLIENT_ID);
 		const resumedEvents = await resumedStream.readUntil(/"error":"second"/);
 		assert.match(resumedEvents, /id: 2/);
 		const streamClosed = new Promise<void>((resolveClosed, rejectClosed) => {
@@ -603,13 +619,168 @@ describe("secure mobile server", () => {
 });
 
 describe("controller leases", () => {
-	test("permits one controller until expiry and supports explicit release", () => {
+	test("binds ownership to session ID + client ID composite", () => {
 		const leases = new ControllerLeases(1_000);
-		assert.equal(leases.claim("instance", "phone-a", 10_000), true);
-		assert.equal(leases.claim("instance", "phone-b", 10_500), false);
-		assert.equal(leases.claim("instance", "phone-b", 11_001), true);
-		leases.release("instance", "phone-b");
-		assert.equal(leases.claim("instance", "phone-a", 11_002), true);
+		// Same session, same client: claim succeeds (renew)
+		assert.equal(leases.claim("inst", "session-a", "client-1", 10_000), true);
+		// Same session, different client: rejected (other device)
+		assert.equal(leases.claim("inst", "session-a", "client-2", 10_500), false);
+		// Different session entirely: rejected
+		assert.equal(leases.claim("inst", "session-b", "client-1", 10_500), false);
+		// After expiry, anyone can claim
+		assert.equal(leases.claim("inst", "session-c", "client-3", 11_001), true);
+	});
+
+	test("release with matching session+client works", () => {
+		const leases = new ControllerLeases(1_000);
+		leases.claim("inst", "session-a", "client-1", 10_000);
+		// Wrong client: no-op
+		leases.release("inst", "session-a", "client-2");
+		assert.equal(leases.claim("inst", "session-a", "client-2", 10_500), false);
+		// Correct client: releases
+		leases.release("inst", "session-a", "client-1");
+		assert.equal(leases.claim("inst", "session-a", "client-2", 10_500), true);
+	});
+
+	test("release with session only clears all leases for that session", () => {
+		const leases = new ControllerLeases(10_000);
+		leases.claim("inst-a", "session-a", "client-1", 10_000);
+		leases.claim("inst-b", "session-a", "client-2", 10_000);
+		leases.claim("inst-c", "session-b", "client-3", 10_000);
+		leases.release("inst-a", "session-a");
+		// session-a can now claim inst-a via another client
+		assert.equal(leases.claim("inst-a", "session-a", "client-2", 10_500), true);
+		// but not inst-b (still held by client-2 on session-a)
+		assert.equal(leases.claim("inst-b", "session-a", "client-1", 10_500), false);
+		// session-b unaffected
+		assert.equal(leases.claim("inst-c", "session-b", "client-3", 11_000), true);
+	});
+});
+
+describe("per-client controller ownership", () => {
+	test("two clients sharing one session cannot concurrently mutate an instance", async () => {
+		const { server } = await createFixture(undefined, { maxInstances: 2 });
+		const auth = await pair(server);
+		const clientA = "client-alpha";
+		const clientB = "client-bravo";
+
+		const spawned = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: clientA,
+			body: { label: "alpha-instance" },
+		});
+		assert.equal(spawned.status, 201);
+		const instance = spawned.json.instance as InstanceSummary;
+
+		// Client A opens SSE (claims lease)
+		const streamA = await openEventStream(server, instance.id, auth.cookie, undefined, clientA);
+		await streamA.readUntil(/event: snapshot/);
+
+		// Client A can send commands
+		const cmdA = await request(server, {
+			path: `/api/instances/${instance.id}/commands`,
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: clientA,
+			body: { command: { type: "prompt", message: "from A" } },
+		});
+		assert.equal(cmdA.status, 200);
+
+		// Client B (same session, different client ID) is rejected
+		const cmdB = await request(server, {
+			path: `/api/instances/${instance.id}/commands`,
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: clientB,
+			body: { command: { type: "prompt", message: "from B" } },
+		});
+		assert.equal(cmdB.status, 409);
+		assert.equal(cmdB.json.code, "controller_in_use");
+
+		// Client B also can't open SSE
+		const streamBRejected = await request(server, {
+			path: `/api/instances/${instance.id}/events`,
+			method: "GET",
+			cookie: auth.cookie,
+			clientId: clientB,
+		});
+		assert.equal(streamBRejected.status, 409);
+
+		// Client B can't stop
+		const stopB = await request(server, {
+			path: `/api/instances/${instance.id}/stop`,
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: clientB,
+			body: {},
+		});
+		assert.equal(stopB.status, 409);
+
+		// Client B can't send UI responses
+		const uiB = await request(server, {
+			path: `/api/instances/${instance.id}/ui-responses`,
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: clientB,
+			body: { response: { type: "extension_ui_response", id: "x", confirmed: true } },
+		});
+		assert.equal(uiB.status, 409);
+
+		// Cleanup
+		streamA.response.destroy();
+		streamA.request.destroy();
+		await new Promise((r) => setTimeout(r, 25));
+
+		// Client A can still stop its own instance
+		const stopA = await request(server, {
+			path: `/api/instances/${instance.id}/stop`,
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: clientA,
+			body: {},
+		});
+		assert.equal(stopA.status, 200);
+	});
+
+	test("missing client ID returns client_id_required", async () => {
+		const { server } = await createFixture();
+		const auth = await pair(server);
+
+		const spawned = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			body: {},
+		});
+		assert.equal(spawned.status, 201);
+		const instance = spawned.json.instance as InstanceSummary;
+
+		const noClient = await request(server, {
+			path: `/api/instances/${instance.id}/commands`,
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			body: { command: { type: "prompt", message: "hi" } },
+		});
+		assert.equal(noClient.status, 400);
+		assert.equal(noClient.json.code, "client_id_required");
 	});
 });
 
@@ -627,17 +798,18 @@ describe("SSE connection limits", () => {
 		});
 		const instance = spawned.json.instance as InstanceSummary;
 
-		const conn1 = await openEventStream(server, instance.id, auth.cookie);
+		const conn1 = await openEventStream(server, instance.id, auth.cookie, undefined, TEST_CLIENT_ID);
 		await conn1.readUntil(/event: snapshot/);
-		const conn2 = await openEventStream(server, instance.id, auth.cookie);
+		const conn2 = await openEventStream(server, instance.id, auth.cookie, undefined, TEST_CLIENT_ID);
 		await conn2.readUntil(/event: snapshot/);
-		const conn3 = await openEventStream(server, instance.id, auth.cookie);
+		const conn3 = await openEventStream(server, instance.id, auth.cookie, undefined, TEST_CLIENT_ID);
 		await conn3.readUntil(/event: snapshot/);
 
 		const rejected = await request(server, {
 			path: `/api/instances/${instance.id}/events`,
 			method: "GET",
 			cookie: auth.cookie,
+			clientId: TEST_CLIENT_ID,
 		});
 		assert.equal(rejected.status, 429);
 
@@ -682,6 +854,7 @@ describe("instance spawn limits", () => {
 					origin: server.origin,
 					cookie: auth.cookie,
 					csrf: auth.csrf,
+					clientId: TEST_CLIENT_ID,
 					body: {},
 				}),
 			),
@@ -762,6 +935,7 @@ describe("configurable instance capacity", () => {
 					origin: server.origin,
 					cookie: auth.cookie,
 					csrf: auth.csrf,
+					clientId: TEST_CLIENT_ID,
 					body: {},
 				}),
 			),
@@ -799,6 +973,7 @@ describe("configurable instance capacity", () => {
 			origin: server.origin,
 			cookie: auth.cookie,
 			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
 			body: {},
 		});
 		assert.equal(stopped.status, 200);
@@ -848,6 +1023,7 @@ describe("configurable instance capacity", () => {
 					origin: server.origin,
 					cookie: auth.cookie,
 					csrf: auth.csrf,
+					clientId: TEST_CLIENT_ID,
 					body: {},
 				});
 			}),
@@ -929,6 +1105,190 @@ describe("API rate limiting", () => {
 			body: {},
 		});
 		assert.equal(overLimit.status, 429);
+	});
+});
+
+describe("image signature validation", () => {
+	test("accepts a valid JPEG signature", async () => {
+		const { server } = await createFixture();
+		const auth = await pair(server);
+		const spawned = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
+			body: {},
+		});
+		const instance = spawned.json.instance as InstanceSummary;
+		const path = `/api/instances/${instance.id}/commands`;
+
+		const res = await request(server, {
+			path,
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
+			body: { type: "prompt", message: "hi", images: [{ type: "image", data: "/9j/", mimeType: "image/jpeg" }] },
+		});
+		assert.equal(res.status, 200);
+	});
+
+	test("rejects PNG data declared as JPEG (signature mismatch)", async () => {
+		const { server } = await createFixture();
+		const auth = await pair(server);
+		const spawned = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
+			body: {},
+		});
+		const instance = spawned.json.instance as InstanceSummary;
+		const path = `/api/instances/${instance.id}/commands`;
+
+		// iVBORw0KGgo = PNG 8-byte signature
+		const res = await request(server, {
+			path,
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
+			body: {
+				type: "prompt",
+				message: "hi",
+				images: [{ type: "image", data: "iVBORw0KGgo=", mimeType: "image/jpeg" }],
+			},
+		});
+		assert.equal(res.status, 400);
+		assert.equal(res.json.code, "invalid_images");
+	});
+
+	test("accepts a valid PNG signature", async () => {
+		const { server } = await createFixture();
+		const auth = await pair(server);
+		const spawned = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
+			body: {},
+		});
+		const instance = spawned.json.instance as InstanceSummary;
+		const path = `/api/instances/${instance.id}/commands`;
+
+		const res = await request(server, {
+			path,
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
+			body: { type: "prompt", message: "hi", images: [{ type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" }] },
+		});
+		assert.equal(res.status, 200);
+	});
+
+	test("rejects data too short for the declared MIME signature", async () => {
+		const { server } = await createFixture();
+		const auth = await pair(server);
+		const spawned = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
+			body: {},
+		});
+		const instance = spawned.json.instance as InstanceSummary;
+		const path = `/api/instances/${instance.id}/commands`;
+
+		// Only 2 bytes, too short for PNG's 8-byte signature
+		const res = await request(server, {
+			path,
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
+			body: { type: "prompt", message: "hi", images: [{ type: "image", data: "AAA=", mimeType: "image/png" }] },
+		});
+		assert.equal(res.status, 400);
+	});
+});
+
+describe("debug log and error redaction", () => {
+	test("debug log endpoint returns entries with redacted content", async () => {
+		const { server } = await createFixture();
+		const auth = await pair(server);
+
+		// Send a malformed request to trigger a 500 (errorId in response)
+		const _bad = await request(server, {
+			path: "/api/instances/this-id-does-not-exist/messages",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
+			body: { type: "prompt", message: "test" },
+		});
+
+		const logs = await request(server, {
+			path: "/api/debug/logs",
+			cookie: auth.cookie,
+		});
+		assert.equal(logs.status, 200);
+		assert.ok(Array.isArray(logs.json.entries));
+	});
+
+	test("HttpError responses contain no errorId (reserved for server faults)", async () => {
+		const { server } = await createFixture();
+		const auth = await pair(server);
+
+		const result = await request(server, {
+			path: "/api/instances/nonexistent-id/messages",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
+			body: { type: "prompt", message: "x" },
+		});
+		// This is an expected HttpError, not a server fault
+		assert.equal(result.status, 404);
+		assert.equal(result.json.code, "unknown_instance");
+		assert.equal(result.json.errorId, undefined);
+	});
+
+	test("debug log entries can be filtered by after parameter", async () => {
+		const { server } = await createFixture();
+		const auth = await pair(server);
+
+		const result = await request(server, {
+			path: "/api/instances/nonexistent-id/messages",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			clientId: TEST_CLIENT_ID,
+			body: { type: "prompt", message: "x" },
+		});
+		const errorId = result.json.errorId as string;
+
+		const sinceError = await request(server, {
+			path: `/api/debug/logs?after=${errorId}`,
+			cookie: auth.cookie,
+		});
+		assert.equal(sinceError.status, 200);
+		assert.ok(Array.isArray(sinceError.json.entries));
 	});
 });
 

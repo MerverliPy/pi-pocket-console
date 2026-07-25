@@ -12,7 +12,10 @@ to its host process. Treat access to this app like shell access to the host.
 - Mutation requests require a same-origin request and a per-session CSRF token.
 - Every Pi instance starts in the configured workspace; the phone cannot
   choose a different startup directory.
-- Only one browser controller can own an instance at a time.
+- Only one browser profile (identified by a stable client ID generated with
+  `crypto.randomUUID` and stored in localStorage) can control a given instance
+  at a time. Two devices sharing the same session cookie are still isolated
+  by their client ID.
 - The number of live Pi instances is capped at 1 by default. The cap is
   configurable via `--max-instances` / `PI_POCKET_MAX_INSTANCES` and enforced
   atomically at the instance-manager level. The UI shows a capacity warning
@@ -58,6 +61,9 @@ locally before relying on project resources from mobile.
 - Pairing uses a one-time code, not a passkey.
 - Device sessions are in memory and are revoked by restarting the gateway.
 - The Shell surface uses Pi RPC `bash`; it is not an interactive PTY.
+- Browser drafts (saved message text in localStorage) may contain sensitive
+  prompts. They are stored only on this device and are never synchronized
+  to the host. Clear them from the Controls menu.
 - Browser background suspension can interrupt the live event stream. The PWA
   reconnects and rehydrates Pi state when it returns to the foreground.
 - A stopped gateway cannot wake a sleeping host.
