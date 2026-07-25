@@ -19,6 +19,10 @@ const MAX_TOTAL_IMAGE_BYTES = 1_920 * 1024;
 const MAX_SSE_HISTORY_BYTES = 2 * 1024 * 1024;
 const MAX_SSE_HISTORY_EVENTS = 256;
 const MAX_SSE_CLIENT_BUFFER_BYTES = 1024 * 1024;
+const MAX_SSE_CLIENTS_PER_SESSION = 3;
+const MAX_LIVE_INSTANCES = 8;
+const API_WINDOW_MS = 60_000;
+const API_MAX_REQUESTS = 120;
 const ALLOWED_IMAGE_TYPES: ReadonlySet<string> = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"]);
 const SECURITY_HEADERS: Readonly<Record<string, string>> = {
 	"Content-Security-Policy":
@@ -71,6 +75,11 @@ interface TlsOptions {
 	key: string | Buffer;
 }
 
+export interface ApiRateLimit {
+	windowMs: number;
+	maxRequests: number;
+}
+
 export interface PocketServerOptions {
 	workspaceRoot: string;
 	host?: string;
@@ -81,6 +90,7 @@ export interface PocketServerOptions {
 	publicDir?: string;
 	bodyLimitBytes?: number;
 	controllerLeaseMs?: number;
+	apiRateLimit?: ApiRateLimit;
 	instanceController?: InstanceController;
 }
 
@@ -154,6 +164,20 @@ class StreamHub {
 			}
 		}, 15_000);
 		this.keepAliveTimer.unref();
+	}
+
+	checkOwnerLimit(owner: string): void {
+		let count = 0;
+		for (const stream of this.streams.values()) {
+			for (const client of stream.clients) {
+				if (client.owner === owner) {
+					count += 1;
+					if (count >= MAX_SSE_CLIENTS_PER_SESSION) {
+						throw new HttpError("Too many event stream connections", 429, "too_many_streams");
+					}
+				}
+			}
+		}
 	}
 
 	attach(
@@ -607,6 +631,8 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 	const leases = new ControllerLeases(options.controllerLeaseMs);
 	const streamHub = new StreamHub(controller, leases, (owner) => auth.isSessionActive(owner));
 	const bodyLimit = options.bodyLimitBytes ?? DEFAULT_BODY_LIMIT;
+	const rateLimit = options.apiRateLimit ?? { windowMs: API_WINDOW_MS, maxRequests: API_MAX_REQUESTS };
+	const apiRateBuckets = new Map<string, number[]>();
 	let expectedOrigin = options.publicOrigin ? normalizeOrigin(options.publicOrigin) : "";
 	if (localInsecure && expectedOrigin && !expectedOrigin.startsWith("http://")) {
 		throw new Error("localInsecure requires an http:// publicOrigin");
@@ -661,6 +687,20 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 					throw new HttpError("CSRF token is invalid", 403, "csrf_rejected");
 				}
 
+				if (method === "POST") {
+					const now = Date.now();
+					const bucket = apiRateBuckets.get(session.id) ?? [];
+					const cutoff = now - rateLimit.windowMs;
+					while (bucket.length > 0 && bucket[0] < cutoff) {
+						bucket.shift();
+					}
+					if (bucket.length >= rateLimit.maxRequests) {
+						throw new HttpError("Too many requests", 429, "rate_limited");
+					}
+					bucket.push(now);
+					apiRateBuckets.set(session.id, bucket);
+				}
+
 				if (pathname === "/api/bootstrap" && method === "GET") {
 					sendJson(response, 200, {
 						authenticated: true,
@@ -683,6 +723,10 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 					const body = await readJson(request, bodyLimit);
 					if (!isObject(body) || body.cwd !== undefined) {
 						throw new HttpError("Client-selected cwd is not allowed", 400, "fixed_workspace_required");
+					}
+					const liveCount = controller.list().filter((i) => i.status !== "stopped").length;
+					if (liveCount >= MAX_LIVE_INSTANCES) {
+						throw new HttpError(`Too many live instances (max ${MAX_LIVE_INSTANCES})`, 429, "too_many_instances");
 					}
 					const label = optionalString(body.label, "label", 128);
 					const instance = await controller.spawn(label);
@@ -717,6 +761,7 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 					return;
 				}
 				if (instanceRoute.action === "events" && method === "GET") {
+					streamHub.checkOwnerLimit(session.id);
 					if (!leases.claim(instance.id, session.id)) {
 						throw new HttpError("Another controller currently owns this instance", 409, "controller_in_use");
 					}
@@ -797,7 +842,7 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 				sendJson(response, error.status, { error: error.message, code: error.code }, error.headers);
 				return;
 			}
-			console.error(error);
+			console.error(error instanceof Error ? error.message : String(error));
 			sendJson(response, 500, { error: "Internal server error", code: "internal_error" });
 		}
 	};

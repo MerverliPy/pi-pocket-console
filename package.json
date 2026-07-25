@@ -19,11 +19,16 @@
 		"build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').chmodSync('dist/cli.js', 0o755)\"",
 		"check": "biome check . && tsc --noEmit && node --check public/app.js && node --check public/sw.js",
 		"dev": "tsx src/cli.ts",
+		"postinstall": "node -e \"var fs=require('fs'),p='node_modules/@earendil-works/pi-coding-agent/npm-shrinkwrap.json';if(fs.existsSync(p)&&!process.env.PPC){process.env.PPC='1';fs.unlinkSync(p);var c=require('child_process');c.execSync('npm install --ignore-scripts',{cwd:process.cwd(),env:process.env,stdio:'inherit'})}\"",
 		"start": "node dist/cli.js",
 		"test": "node --import tsx --test test/*.test.ts"
 	},
 	"dependencies": {
-		"@earendil-works/pi-coding-agent": "0.81.1"
+		"@earendil-works/pi-coding-agent": "0.82.0"
+	},
+	"overrides": {
+		"brace-expansion": "5.0.8",
+		"protobufjs": "7.6.5"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.5",

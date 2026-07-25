@@ -612,3 +612,147 @@ describe("controller leases", () => {
 		assert.equal(leases.claim("instance", "phone-a", 11_002), true);
 	});
 });
+
+describe("SSE connection limits", () => {
+	test("rejects more than 3 concurrent event stream connections per session", async () => {
+		const { server } = await createFixture();
+		const auth = await pair(server);
+		const spawned = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			body: {},
+		});
+		const instance = spawned.json.instance as InstanceSummary;
+
+		const conn1 = await openEventStream(server, instance.id, auth.cookie);
+		await conn1.readUntil(/event: snapshot/);
+		const conn2 = await openEventStream(server, instance.id, auth.cookie);
+		await conn2.readUntil(/event: snapshot/);
+		const conn3 = await openEventStream(server, instance.id, auth.cookie);
+		await conn3.readUntil(/event: snapshot/);
+
+		const rejected = await request(server, {
+			path: `/api/instances/${instance.id}/events`,
+			method: "GET",
+			cookie: auth.cookie,
+		});
+		assert.equal(rejected.status, 429);
+
+		conn1.response.destroy();
+		conn1.request.destroy();
+		conn2.response.destroy();
+		conn2.request.destroy();
+		conn3.response.destroy();
+		conn3.request.destroy();
+	});
+});
+
+describe("instance spawn limits", () => {
+	test("rejects spawning more than the maximum live instances", async () => {
+		const { server } = await createFixture();
+		const auth = await pair(server);
+		const ids: string[] = [];
+
+		for (let attempt = 0; attempt < 9; attempt += 1) {
+			const result = await request(server, {
+				path: "/api/instances",
+				method: "POST",
+				origin: server.origin,
+				cookie: auth.cookie,
+				csrf: auth.csrf,
+				body: { label: `test-${attempt}` },
+			});
+			if (attempt < 8) {
+				assert.equal(result.status, 201);
+				ids.push((result.json.instance as InstanceSummary).id);
+			} else {
+				assert.equal(result.status, 429);
+			}
+		}
+		assert.equal(ids.length, 8);
+
+		await Promise.all(
+			ids.map((id) =>
+				request(server, {
+					path: `/api/instances/${id}/stop`,
+					method: "POST",
+					origin: server.origin,
+					cookie: auth.cookie,
+					csrf: auth.csrf,
+					body: {},
+				}),
+			),
+		);
+	});
+});
+
+describe("API rate limiting", () => {
+	test("rejects requests exceeding the configured per-session POST limit", async () => {
+		const { server } = await createFixture(undefined, {
+			apiRateLimit: { windowMs: 10_000, maxRequests: 3 },
+		});
+		const auth = await pair(server);
+
+		const first = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			body: {},
+		});
+		assert.equal(first.status, 201);
+
+		const second = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			body: {},
+		});
+		assert.equal(second.status, 201);
+
+		const limited = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			body: {},
+		});
+		assert.equal(limited.status, 201);
+
+		const overLimit = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			body: {},
+		});
+		assert.equal(overLimit.status, 429);
+	});
+});
+
+describe("secure cookie prefix", () => {
+	test("uses __Secure- prefix when running in secure mode", async () => {
+		const { server } = await createFixture(undefined, {
+			localInsecure: false,
+			publicOrigin: "https://pocket.example.ts.net",
+		});
+		const auth = await pair(server);
+		assert.match(auth.setCookie, /__Secure-pi_pocket_session=/);
+		assert.match(auth.setCookie, /; Secure/);
+	});
+
+	test("does not use __Secure- prefix in local-insecure mode", async () => {
+		const { server } = await createFixture();
+		const auth = await pair(server);
+		assert.doesNotMatch(auth.setCookie, /__Secure-pi_pocket_session/);
+		assert.doesNotMatch(auth.setCookie, /; Secure/);
+	});
+});
