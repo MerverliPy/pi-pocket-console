@@ -40,6 +40,51 @@
 
 * {
 	box-sizing: border-box;
+	-webkit-tap-highlight-color: transparent;
+}
+
+button,
+a,
+input,
+textarea,
+select,
+[tabindex]:not([tabindex="-1"]) {
+	-webkit-touch-callout: none;
+}
+
+.transcript,
+.message-body,
+.composer textarea,
+.settings-content,
+.diagnostics-content,
+.session-detail-content,
+.extension-dialog input,
+.extension-dialog textarea {
+	-webkit-touch-callout: default;
+	user-select: text;
+}
+
+nav,
+.bottom-nav,
+.mode-strip,
+.icon-button,
+.primary-button,
+.secondary-button,
+.send-button,
+.abort-button,
+.jump-latest,
+.file-row,
+.session-item,
+.crumb,
+.settings-option,
+.prompt-suggestions button,
+.instance-card,
+.command-item,
+.option-item,
+.control-menu button,
+.spawn-form button,
+.terminal-shortcut-bar button {
+	user-select: none;
 }
 
 html {
@@ -572,6 +617,24 @@ svg {
 	font-weight: 760;
 	letter-spacing: 0.1em;
 	text-transform: uppercase;
+	transition:
+		border-color 200ms ease,
+		background 200ms ease,
+		color 200ms ease;
+}
+
+.connection-label[data-state="connecting"] {
+	animation: label-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes label-pulse {
+	0%,
+	100% {
+		opacity: 0.7;
+	}
+	50% {
+		opacity: 1;
+	}
 }
 
 .connection-label[data-state="online"] {
@@ -597,6 +660,15 @@ svg {
 	border-radius: 13px;
 	background: rgba(255, 255, 255, 0.025);
 	place-items: center;
+	transition:
+		background 120ms ease,
+		border-color 120ms ease;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.icon-button:hover {
+	border-color: var(--line-strong);
+	background: rgba(255, 255, 255, 0.045);
 }
 
 .icon-button:active {
@@ -793,6 +865,63 @@ svg {
 .prompt-suggestions small {
 	color: var(--dim);
 	font-size: 10px;
+}
+
+.skeleton {
+	border-radius: 12px;
+	background: linear-gradient(90deg, var(--panel-high) 25%, rgba(154, 168, 175, 0.08) 50%, var(--panel-high) 75%);
+	background-size: 200% 100%;
+	animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
+}
+
+.skeleton-message {
+	margin: 0 0 17px;
+}
+
+.skeleton-message .skeleton-header {
+	width: 80px;
+	height: 10px;
+	margin-bottom: 12px;
+}
+
+.skeleton-message .skeleton-line {
+	width: 100%;
+	height: 12px;
+	margin-bottom: 8px;
+}
+
+.skeleton-message .skeleton-line:last-child {
+	width: 65%;
+}
+
+.skeleton-message .skeleton-block {
+	width: 100%;
+	height: 48px;
+	margin: 9px 0;
+	border-radius: 12px;
+}
+
+.loading-pulse {
+	animation: loading-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes loading-pulse {
+	0%,
+	100% {
+		opacity: 0.4;
+	}
+	50% {
+		opacity: 0.8;
+	}
 }
 
 .message {
@@ -1312,6 +1441,12 @@ svg {
 	color: var(--dim);
 	font-size: 9px;
 	font-weight: 660;
+	transition: color 120ms ease;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.bottom-nav button:active {
+	transform: scale(0.93);
 }
 
 .bottom-nav button svg {
@@ -1331,6 +1466,13 @@ svg {
 	background: rgba(0, 0, 0, 0.58);
 	backdrop-filter: blur(4px);
 	-webkit-backdrop-filter: blur(4px);
+	animation: backdrop-in 200ms ease;
+}
+
+@keyframes backdrop-in {
+	from {
+		opacity: 0;
+	}
 }
 
 dialog {
@@ -2295,6 +2437,8 @@ dialog {
 	font-size: 12px;
 	cursor: pointer;
 	padding: 2px 4px;
+	min-height: 44px;
+	min-width: 44px;
 }
 
 .file-row {
@@ -2303,6 +2447,7 @@ dialog {
 	gap: 10px;
 	width: 100%;
 	padding: 8px 16px;
+	min-height: 44px;
 	background: transparent;
 	border: none;
 	border-bottom: 1px solid var(--line);
@@ -2337,7 +2482,9 @@ dialog {
 }
 
 .bottom-nav {
-	transition: transform 0.25s ease, opacity 0.25s ease;
+	transition:
+		transform 0.25s ease,
+		opacity 0.25s ease;
 }
 
 .bottom-nav.nav-hidden {
@@ -2415,6 +2562,7 @@ dialog {
 	color: var(--text);
 	border-radius: var(--radius-sm);
 	padding: 8px 14px;
+	min-height: 44px;
 	font-size: 14px;
 	cursor: pointer;
 }
@@ -2490,7 +2638,8 @@ dialog {
 	font-size: 12px;
 	font-family: var(--font-mono);
 	cursor: pointer;
-	min-width: 32px;
+	min-width: 40px;
+	min-height: 40px;
 	text-align: center;
 	touch-action: manipulation;
 }
@@ -2686,6 +2835,7 @@ dialog {
 	gap: 10px;
 	width: 100%;
 	padding: 10px 16px;
+	min-height: 44px;
 	background: transparent;
 	border: none;
 	border-bottom: 1px solid var(--line);
@@ -2772,9 +2922,28 @@ dialog {
 	animation: fadeIn 0.2s ease;
 }
 
+.pair-back {
+	margin-top: 8px;
+	width: 100%;
+}
+
+.pair-warning {
+	margin: 12px 0;
+}
+
+.terminal-fullscreen-btn {
+	margin-left: auto;
+}
+
 @keyframes fadeIn {
-	from { opacity: 0; transform: translateY(8px); }
-	to { opacity: 1; transform: translateY(0); }
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
 }
 
 .connection-summary {

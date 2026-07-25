@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<meta name="theme-color" content="#080b0e" />
+		<meta name="color-scheme" content="dark" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+		<meta name="apple-mobile-web-app-title" content="Pi Pocket" />
+		<link rel="icon" href="/icon.svg" type="image/svg+xml" />
+		<title>Offline — Pi Pocket Console</title>
+		<style>
+			* { box-sizing: border-box; margin: 0; }
+			html { height: 100%; background: #0b0f12; -webkit-text-size-adjust: 100%; }
+			body {
+				display: flex; min-height: 100dvh; align-items: center; justify-content: center;
+				padding: 24px; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+					"Helvetica Neue", Arial, sans-serif; color: #f2f7f9;
+				background: radial-gradient(circle at 50% 30%, rgba(56,217,242,0.06), transparent 60%);
+			}
+			.offline-card {
+				text-align: center; max-width: 340px; padding: 40px 28px;
+				border-radius: 26px; background: rgba(18,24,29,0.88);
+				border: 1px solid rgba(154,168,175,0.15);
+				box-shadow: 0 24px 70px rgba(0,0,0,0.42);
+			}
+			.offline-ring {
+				width: 64px; height: 64px; margin: 0 auto 20px; border-radius: 50%;
+				border: 2px solid rgba(56,217,242,0.18); display: flex; align-items: center;
+				justify-content: center; position: relative;
+			}
+			.offline-ring::before {
+				content: ""; position: absolute; inset: 6px; border-radius: 50%;
+				background: radial-gradient(circle, rgba(56,217,242,0.12), transparent 70%);
+			}
+			.offline-ring svg { width: 26px; height: 26px; color: #38d9f2; position: relative; }
+			h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
+			p { font-size: 14px; color: #9aa8af; line-height: 1.5; margin-bottom: 24px; }
+			.retry-button {
+				display: inline-flex; min-height: 44px; align-items: center; gap: 6px;
+				padding: 0 20px; border: 0; border-radius: 12px; cursor: pointer;
+				background: linear-gradient(135deg, #38d9f2, #0f9baf); color: #051518;
+				font-size: 14px; font-weight: 600; -webkit-tap-highlight-color: transparent;
+			}
+			.retry-button:active { transform: scale(0.97); }
+			@media (prefers-color-scheme: light) {
+				html { background: #eef4f4; }
+				body { color: #102326; background: radial-gradient(circle at 50% 30%, rgba(8,124,121,0.06), transparent 60%); }
+				.offline-card { background: rgba(248,251,251,0.9); border-color: rgba(25,57,62,0.14); box-shadow: 0 24px 70px rgba(31,52,55,0.2); }
+				h1 { color: #102326; }
+				p { color: #4d676c; }
+				.retry-button { background: linear-gradient(135deg, #3fc3bd, #1ba6a1); color: #062e2c; }
+			}
+			@keyframes pulse-ring { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+			.offline-ring { animation: pulse-ring 2.4s ease-in-out infinite; }
+		</style>
+	</head>
+	<body>
+		<div class="offline-card">
+			<div class="offline-ring" aria-hidden="true">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M4.9 4.9 19.1 19.1"/>
+					<path d="M8.5 8.5A9.8 9.8 0 0 1 21 10.8"/>
+					<path d="M3 10.8a12.7 12.7 0 0 1 2.6-2"/>
+					<path d="M6.5 14.3a7.8 7.8 0 0 1 5.5-2.2c1 0 2 .2 2.9.5"/>
+					<path d="M10 17.7a3 3 0 0 1 4 0"/>
+					<path d="M12 21h.01"/>
+				</svg>
+			</div>
+			<h1>You're offline</h1>
+			<p>Pi Pocket needs a network connection to reach the host. Reconnect to resume.</p>
+			<button class="retry-button" onclick="location.reload()" type="button">
+				<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M1 12a11 11 0 0 1 21.4-5.5"/><path d="M12 1v4"/><path d="M23 12a11 11 0 0 1-21.4 5.5"/><path d="M12 23v-4"/></svg>
+				Retry connection
+			</button>
+		</div>
+	</body>
+</html>

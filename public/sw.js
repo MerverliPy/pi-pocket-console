@@ -1,9 +1,10 @@
 const CACHE_PREFIX = "pi-pocket-shell";
-const CACHE_NAME = `${CACHE_PREFIX}-v2`;
+const CACHE_NAME = `${CACHE_PREFIX}-v3`;
 
 const SHELL_PATHS = new Set([
 	"/",
 	"/index.html",
+	"/offline.html",
 	"/app.css",
 	"/app.js",
 	"/platform.js",
@@ -46,24 +47,33 @@ self.addEventListener("fetch", (event) => {
 	}
 
 	const url = new URL(request.url);
-	if (url.origin !== self.location.origin || url.pathname === "/api" || url.pathname.startsWith("/api/")) {
+	if (url.origin !== self.location.origin) {
 		return;
 	}
 
-	if (!SHELL_PATHS.has(url.pathname)) {
+	if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
 		return;
 	}
 
-	event.respondWith(
-		caches.open(CACHE_NAME).then(async (cache) => {
-			const cached = await cache.match(request, { ignoreSearch: true });
-			const fetchPromise = fetch(request).then((response) => {
-				if (response.ok) {
-					cache.put(request, response.clone());
-				}
-				return response;
-			}).catch(() => cached);
-			return cached || fetchPromise;
-		}),
-	);
+	if (SHELL_PATHS.has(url.pathname)) {
+		event.respondWith(
+			caches.open(CACHE_NAME).then(async (cache) => {
+				const cached = await cache.match(request, { ignoreSearch: true });
+				const fetchPromise = fetch(request)
+					.then((response) => {
+						if (response.ok) {
+							cache.put(request, response.clone());
+						}
+						return response;
+					})
+					.catch(() => cached);
+				return cached || fetchPromise;
+			}),
+		);
+		return;
+	}
+
+	if (request.mode === "navigate") {
+		event.respondWith(fetch(request).catch(() => caches.match("/offline.html")));
+	}
 });
