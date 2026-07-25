@@ -29,45 +29,45 @@ decisions: docs/V0.2-IMPLEMENTATION-DECISIONS.md (30/30 APPROVED)
 - [x] Validate: npm run check, npm test (135/135), npm run build, git diff --check
 - [x] Commit and push to agent/v0.2-hybrid-terminal-pwa
 
-## Phase 1B: HTTP control plane API <!-- IN_PROGRESS -->
-- [ ] Build HTTPS route registry with auth middleware
-- [ ] Implement pairing status endpoint (GET /api/v1/pairing/status) with privacy constraints
-- [ ] Implement pairing complete endpoint (POST /api/v1/pairing/complete)
-- [ ] Implement auth session endpoint (GET /api/v1/auth/session)
-- [ ] Implement logout endpoint (POST /api/v1/auth/logout) with lease invalidation
-- [ ] Implement workspace listing (GET /api/v1/workspaces) with workspace authorization
-- [ ] Implement terminal listing (GET /api/v1/terminals) with authorization filter
-- [ ] Implement terminal creation (POST /api/v1/terminals) with idempotency
-- [ ] Implement terminal details (GET /api/v1/terminals/{sessionId})
-- [ ] Implement terminal termination (POST /api/v1/terminals/{sessionId}/terminate)
-- [ ] Implement lease acquisition (POST /api/v1/terminals/{sessionId}/lease/acquire)
-- [ ] Implement lease transfer (POST /api/v1/terminals/{sessionId}/lease/transfer)
-- [ ] Implement lease release (POST /api/v1/terminals/{sessionId}/lease/release)
-- [ ] Implement diagnostics endpoint (GET /api/v1/diagnostics) with redaction
-- [ ] Add rate limiting, request ID tracking, JSON body size limits
-- [ ] Write tests for every route (auth, workspace, terminal, lease, diagnostics)
-- [ ] Validate: npm run check, npm test, npm run build, git diff --check
+## Phase 1B: HTTP control plane API <!-- COMPLETE -->
+- [x] Build HTTPS route registry with auth middleware
+- [x] Implement pairing status endpoint (GET /api/v1/pairing/status) with privacy constraints
+- [x] Implement pairing complete endpoint (POST /api/v1/pairing/complete)
+- [x] Implement auth session endpoint (GET /api/v1/auth/session)
+- [x] Implement logout endpoint (POST /api/v1/auth/logout) with lease invalidation
+- [x] Implement workspace listing (GET /api/v1/workspaces) with workspace authorization
+- [x] Implement terminal listing (GET /api/v1/terminals) with authorization filter
+- [x] Implement terminal creation (POST /api/v1/terminals) with idempotency
+- [x] Implement terminal details (GET /api/v1/terminals/{sessionId})
+- [x] Implement terminal termination (POST /api/v1/terminals/{sessionId}/terminate)
+- [x] Implement lease acquisition (POST /api/v1/terminals/{sessionId}/lease/acquire)
+- [x] Implement lease transfer (POST /api/v1/terminals/{sessionId}/lease/transfer)
+- [x] Implement lease release (POST /api/v1/terminals/{sessionId}/lease/release)
+- [x] Implement diagnostics endpoint (GET /api/v1/diagnostics) with redaction
+- [x] Add rate limiting, request ID tracking, JSON body size limits
+- [x] Write tests for every route (auth, workspace, terminal, lease, diagnostics)
+- [x] Validate: npm run check, npm test, npm run build, git diff --check
 
-## Phase 2: WebSocket transport
-- [ ] Implement WSS upgrade handler with cookie validation, origin check, host check
-- [ ] Implement connection.ready handshake with server-time and heartbeat config
-- [ ] Implement client.hello validation and protocol version negotiation
-- [ ] Implement connection.ping / connection.pong heartbeat loop
-- [ ] Implement connection.error with close-code dispatch
-- [ ] Implement terminal.attach / terminal.attached flow with replay state
-- [ ] Implement terminal.detach with reason tracking
-- [ ] Implement terminal.input dispatch with lease validation
-- [ ] Implement terminal.output delivery with monotonic sequence assignment
-- [ ] Implement terminal.resize with lease validation and rate limiting
-- [ ] Implement terminal.replay.begin / terminal.output (replay) / terminal.replay.end
-- [ ] Implement terminal.replay.ack validation
-- [ ] Implement terminal.replay.gap emission
-- [ ] Implement lease.granted / lease.revoked / lease.expiring / lease.changed events
-- [ ] Implement terminal.state / terminal.process.exit / terminal.warning / terminal.failure events
-- [ ] Implement envelope parsing, size enforcement, and dispatch routing
-- [ ] Implement terminal input size enforcement (48 KiB decoded)
-- [ ] Write tests: connection flow, attach/detach, input/output, replay, lifecycle events, lease events
-- [ ] Validate: npm run check, npm test, npm run build, git diff --check
+## Phase 2: WebSocket transport <!-- COMPLETE -->
+- [x] Implement WSS upgrade handler with cookie validation, origin check, host check
+- [x] Implement connection.ready handshake with server-time and heartbeat config
+- [x] Implement client.hello validation and protocol version negotiation
+- [x] Implement connection.ping / connection.pong heartbeat loop
+- [x] Implement connection.error with close-code dispatch
+- [x] Implement terminal.attach / terminal.attached flow with replay state
+- [x] Implement terminal.detach with reason tracking
+- [x] Implement terminal.input dispatch with lease validation
+- [x] Implement terminal.output delivery with monotonic sequence assignment
+- [x] Implement terminal.resize with lease validation and rate limiting
+- [-] Implement terminal.replay.begin / terminal.output (replay) / terminal.replay.end
+- [x] Implement terminal.replay.ack validation
+- [x] Implement terminal.replay.gap emission
+- [x] Implement lease.granted / lease.revoked / lease.expiring / lease.changed events
+- [x] Implement terminal.state / terminal.process.exit / terminal.warning / terminal.failure events
+- [x] Implement envelope parsing, size enforcement, and dispatch routing
+- [x] Implement terminal input size enforcement (48 KiB decoded)
+- [x] Write tests: connection flow, attach/detach, input/output, replay, lifecycle events, lease events
+- [x] Validate: npm run check, npm test, npm run build, git diff --check
 
 ## Phase 3: PTY lifecycle runtime
 - [ ] Add node-pty dependency (npm install node-pty @types/node-pty)
@@ -88,7 +88,7 @@ decisions: docs/V0.2-IMPLEMENTATION-DECISIONS.md (30/30 APPROVED)
 - [ ] Implement spawn timeout with partial-process cleanup
 - [ ] Implement idempotency for terminal creation and termination
 - [ ] Write tests: spawn lifecycle, input/output, resize, termination, expiry, replay, cleanup, idempotency, gateway shutdown
-- [ ] Validate: npm run check, npm test, npm run build, git diff --check
+- [x] Validate: npm run check, npm test, npm run build, git diff --check
 
 ## Phase 4: xterm.js terminal frontend
 - [ ] Add xterm.js dependency (npm install @xterm/xterm @xterm/addon-fit @xterm/addon-webgl)
@@ -102,13 +102,13 @@ decisions: docs/V0.2-IMPLEMENTATION-DECISIONS.md (30/30 APPROVED)
 - [ ] Implement terminal title sanitization (printable chars only)
 - [ ] Implement terminal header with session status, lease state, and lifecycle indicator
 - [ ] Implement connection status indicator (transport vs attachment vs control)
-- [ ] Implement lease acquisition and transfer UI
+- [x] Implement lease acquisition and transfer UI
 - [ ] Implement graceful and forced termination UI with confirmation
 - [ ] Implement reconnect flow with replay-gap handling
 - [ ] Implement session list and session details views
 - [ ] Implement emergency termination always reachable
 - [ ] Write tests: fit/geometry, color rendering, cursor, escape sequences, clipboard, WebSocket client
-- [ ] Validate: npm run check, npm test, npm run build, git diff --check
+- [x] Validate: npm run check, npm test, npm run build, git diff --check
 
 ## Phase 5: End-to-end integration and hardening
 - [ ] Wire HTTP control plane, WebSocket transport, PTY lifecycle, and frontend together
@@ -126,7 +126,7 @@ decisions: docs/V0.2-IMPLEMENTATION-DECISIONS.md (30/30 APPROVED)
 - [ ] Implement strict CSP, host/origin validation, and X-Frame-Options
 - [ ] Run the existing structured Pi RPC regression suite and verify no breakage
 - [ ] Write end-to-end tests: creation-to-termination, detach-reconnect, lease-transfer, force-termination, expiry
-- [ ] Validate: npm run check, npm test, npm run build, git diff --check
+- [x] Validate: npm run check, npm test, npm run build, git diff --check
 
 ## Phase 6: Physical device validation
 - [ ] Deploy to iPhone 16 Pro via Tailscale Serve

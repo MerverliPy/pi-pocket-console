@@ -24,7 +24,8 @@
 		"test": "node --import tsx --test test/*.test.ts"
 	},
 	"dependencies": {
-		"@earendil-works/pi-coding-agent": "0.82.0"
+		"@earendil-works/pi-coding-agent": "0.82.0",
+		"ws": "^8.21.1"
 	},
 	"overrides": {
 		"brace-expansion": "5.0.8",
@@ -33,6 +34,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "2.3.5",
 		"@types/node": "22.19.19",
+		"@types/ws": "^8.18.1",
 		"tsx": "4.22.1",
 		"typescript": "5.9.3"
 	},
