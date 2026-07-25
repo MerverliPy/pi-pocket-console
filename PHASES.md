@@ -170,3 +170,138 @@ decisions: docs/V0.2-IMPLEMENTATION-DECISIONS.md (30/30 APPROVED)
 - [x] Create FUNDING.yml (GitHub Sponsors)
 - [x] Update .gitignore with .env, .env.*, *.tsbuildinfo patterns
 - [x] Implement PHASES.md audit phase tracking
+
+---
+
+## Phase 8: v0.2 UI Completion — Navigation, Terminal Shortcuts, Full-Screen, Density <!-- IN_PROGRESS -->
+
+**Dependency graph for remaining work:**
+
+```
+8H Sessions enhancement ──► 8J Integration test
+8I Files browser (needs backend + frontend)
+    │
+    ├► Auto-minimizing nav (platform.js)
+    │
+    ├► 3-step onboarding (app.js — highest risk, modifies pairing flow)
+    │
+    ├► Haptic feedback (platform.js + terminal.js)
+    │
+    └► Micro-illustrations (HTML + CSS)
+```
+
+**Compatibility rules:**
+1. 8H: Extends existing `terminal.js` loadSessionList — new DOM only, no existing handler changes
+2. 8I: Adds `GET /api/v1/files` to server + new panel rendering — no existing route conflicts
+3. Auto-minimizing nav: Adds scroll listener in platform.js — never modifies existing nav bindings
+4. 3-step onboarding: Modifies `app.js` `pair()` and `bootstrap()` — must preserve 401 redirect, CSRF, error handling exactly
+5. Haptic: Adds `navigator.vibrate()` calls — no-op on unsupported browsers, never throws
+6. Micro-illustrations: Static SVG in HTML — pure display, zero JS impact
+
+This phase completes the 14 missing features from the VISUAL-SYSTEM.md spec audit.
+
+### Dependency graph (must implement in this order):
+
+```
+Design tokens (CSS vars) ─► Six-tab nav bar
+        │                        │
+        ├► Terminal shortcut bar ├► Full-screen mode
+        │                              │
+        ├► Density profiles ◄──────────┘
+        │
+        └► Platform controllers (viewport, keyboard)
+                 │
+                 ├► Diagnostics UI
+                 ├► Settings UI
+                 └► Files browser
+```
+
+### Compatibility rules — all new code must:
+1. Never break the existing `app.js` pairing/chat flow (runs first, owns pair-screen, app-shell, instance-sheet)
+2. Never break the existing `terminal.js` WebSocket/PTY flow (runs second, owns terminal-panel)
+3. Use the `window.PocketUI` namespace for shared state to avoid global collisions
+4. Use `MutationObserver` or event delegation — never overwrite existing event listeners
+5. All new scripts load after `app.js` and `terminal.js` — they read state from the DOM, not from closures
+6. CSS custom properties cascade — new styles go in `app.css` (already loaded), never in inline `<style>`
+
+### Sub-phase 8A — Design Tokens & Platform Controllers
+- [x] Centralize design tokens as CSS custom properties in `:root` (align with VISUAL-SYSTEM.md Precision Cyan palette)
+- [x] Create `public/platform.js` — viewport controller, orientation controller, lifecycle controller, density profiles, navigation controller, full-screen controller
+- [x] Ensure `public/platform.js` is the first script loaded (before xterm.js)
+
+### Sub-phase 8B — Six-Destination Navigation
+- [x] Update bottom nav from 4 to 6 tabs: Console, Terminal, Files, Status, Sessions, Settings
+- [x] Each tab shows/hides its corresponding panel via data-nav attribute (platform.js: showPanel)
+- [x] Sessions tab opens `terminal-sessions-sheet` dialog directly
+- [x] Console tab shows the existing chat console (main-content + composer-dock)
+- [x] Terminal tab shows the existing terminal-panel
+- [x] Wire nav clicks via event delegation with backward compatibility (app.js [data-nav] handler still works, new platform.js handler extends it)
+
+### Sub-phase 8C — Terminal Shortcut Bar
+- [x] Add shortcut bar below terminal viewport: Ctrl, Esc, Tab, ↑, ↓, More
+- [x] More expands secondary row: Alt, ←, →, PgUp, PgDn, Ctrl+C, Ctrl+D, Paste
+- [x] Each button sends the corresponding terminal sequence via sendEnvelope
+- [x] Modifier state tracking: off → sticky → locked (visible indicator dot via .modifier-indicator)
+
+### Sub-phase 8D — Full-Screen Terminal Mode
+- [x] Add full-screen toggle button to terminal header
+- [x] Full-screen hides topbar, bottom-nav, composer-dock via [data-fullscreen="true"] CSS
+- [x] Emergency termination remains visible in full-screen
+- [x] Exit full-screen via header button or Escape key
+
+### Sub-phase 8E — Density Profiles
+- [x] Add `data-density` attribute via PocketUI.density controller
+- [x] Three profiles: `balanced` (default), `compact` (tighter spacing), `comfort` (larger text/targets)
+- [x] CSS selectors use `:root[data-density="compact"]` and `:root[data-density="comfort"]` overrides
+- [x] Settings UI in settings-panel to switch profiles (persisted to localStorage)
+
+### Sub-phase 8F — Diagnostics Page
+- [x] Diagnostics panel (data-panel="diagnostics", hidden by default)
+- [x] Fetch GET /api/v1/diagnostics and render gateway state, Tailscale boundary, auth expiry, audit events (terminal.js: loadDiagnostics)
+- [x] Redacted event list — expandable details per event
+
+### Sub-phase 8G — Settings Page
+- [x] Settings panel (data-panel="settings", hidden by default)
+- [x] Density profile selector (settings-options data-setting="density")
+- [x] Terminal font size (settings-options data-setting="terminal-font")
+- [x] Connection info display (settings-host from /api/v1/bootstrap)
+
+### Sub-phase 8H — Sessions List Enhancement <!-- PENDING -->
+**Files affected:** `terminal.js`, `index.html`, `app.css`
+**Risk:** Low — extends existing DOM only, no handler changes.
+**Compatibility:** `loadSessionList` called from `TerminalUI.init()` and `TerminalUI.refreshSessions()`. Richer rows + details sheet is pure additive DOM.
+- [ ] Enhanced session rows: host, workspace, state label, lease owner, last-activity timestamp
+- [ ] Expanded details sheet (medium bottom sheet): session ID, process, workspace, lease generation, reconnect deadline, replay state, lifecycle history
+- [ ] Overflow menu for secondary actions (terminate, force, detach)
+
+### Sub-phase 8I — Files Browser <!-- COMPLETE -->
+- [x] Add `GET /api/v1/files` endpoint to server — reads workspace root, returns name/size/modified/type with directory sorting
+- [x] Files panel renders dense rows: icon (folder/file SVG), name, size, path context
+- [x] Tap folder to navigate (breadcrumb navigation)
+- [x] Micro-illustration for empty state
+
+### Sub-phase 8J — Auto-Minimizing Navigation Bar <!-- COMPLETE -->
+- [x] Scroll hide/show behavior for bottom nav (platform.js: initAutoHideNav)
+- [x] CSS transition for smooth hide/show (nav-hidden class)
+- [x] Nav always visible in full-screen mode
+
+### Sub-phase 8K — 3-Step Guided Onboarding <!-- COMPLETE -->
+- [x] Step 1: "Confirm private connection" — connection summary with Tailscale/host/gateway status
+- [x] Step 2: Enter pairing code (existing pair-form, identical behavior)
+- [x] Step 3: "Confirm this device" — device label, session duration, security summary → explicit Confirm action
+- [x] All existing 401 redirect, CSRF, error toast, rate limit paths preserved
+
+### Sub-phase 8L — Haptic Feedback <!-- COMPLETE -->
+- [x] Light haptic (10ms) on terminal shortcut key press (terminal.js: window.PocketUI.haptic(10))
+- [x] Haptic utility function in platform.js (PocketUI.haptic)
+
+### Sub-phase 8M — Functional Micro-Illustrations <!-- COMPLETE -->
+- [x] SVG illustration for empty sessions list (terminal icon)
+- [x] SVG illustration for empty files panel (folder icon)
+
+### Sub-phase 8N — Integration Test & Final Validation <!-- PENDING -->
+- [ ] Verify 3-step onboarding flow (Step 1 → Step 2 → Step 3 → bootstrap)
+- [ ] Verify files browser lists directories and files
+- [ ] Verify auto-minimizing nav shows/hides on scroll
+- [ ] Verify all 6 nav tabs show/hide the correct panels
+- [ ] Run full test suite: npm run check, npm test, npm run build

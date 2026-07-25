@@ -28,6 +28,7 @@
 		<main id="pair-screen" class="pair-screen" aria-labelledby="pair-title">
 			<div class="pair-glow" aria-hidden="true"></div>
 			<section class="pair-card">
+
 				<div class="brand-lockup">
 					<div class="brand-mark" aria-hidden="true">
 						<svg viewBox="0 0 48 48" role="img">
@@ -42,49 +43,63 @@
 					</div>
 				</div>
 
-				<div class="pair-intro">
-					<span class="pulse-dot" aria-hidden="true"></span>
-					<p>Connect this iPhone to the pairing code shown by your Pi Pocket host.</p>
+				<div id="step-1-connection" class="pair-step">
+					<div class="pair-intro">
+						<span class="pulse-dot" aria-hidden="true"></span>
+						<p>This iPhone will connect to your Pi Pocket host over a private Tailscale connection.</p>
+					</div>
+					<div class="connection-summary">
+						<div class="summary-row"><span class="summary-label">Connection</span><span class="summary-value" id="step1-connection">Tailscale verified</span></div>
+						<div class="summary-row"><span class="summary-label">Host</span><span class="summary-value" id="step1-host">opencode-wsl.tail309be3.ts.net</span></div>
+						<div class="summary-row"><span class="summary-label">Gateway</span><span class="summary-value" id="step1-gateway">Available</span></div>
+					</div>
+					<button id="step1-continue" class="primary-button" type="button">
+						<span>Continue</span>
+						<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+					</button>
 				</div>
 
-				<form id="pair-form" class="pair-form" novalidate>
-					<label for="pair-code">Pairing code</label>
-					<div class="code-field">
-						<input
-							id="pair-code"
-							name="code"
-							type="text"
-							inputmode="numeric"
-							autocomplete="one-time-code"
-							autocapitalize="off"
-							spellcheck="false"
-							placeholder="000 000"
-							aria-describedby="pair-help pair-error"
-							maxlength="12"
-							required
-						/>
-						<span id="code-count" aria-hidden="true">6 digits</span>
+				<div id="step-2-pair" class="pair-step" hidden>
+					<div class="pair-intro">
+						<span class="pulse-dot" aria-hidden="true"></span>
+						<p>Enter the pairing code shown by your Pi Pocket host.</p>
 					</div>
-					<p id="pair-help" class="field-help">The code expires on the host. It is used only to establish this controller.</p>
-					<p id="pair-error" class="form-error" role="alert"></p>
-					<button id="pair-submit" class="primary-button" type="submit">
-						<span>Pair this iPhone</span>
-						<svg viewBox="0 0 24 24" aria-hidden="true">
-							<path d="m9 18 6-6-6-6" />
-						</svg>
-					</button>
-				</form>
+					<form id="pair-form" class="pair-form" novalidate>
+						<label for="pair-code">Pairing code</label>
+						<div class="code-field">
+							<input id="pair-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" autocapitalize="off" spellcheck="false" placeholder="000 000" aria-describedby="pair-help pair-error" maxlength="12" required />
+							<span id="code-count" aria-hidden="true">6 digits</span>
+						</div>
+						<p id="pair-help" class="field-help">The code expires on the host. It is used only to establish this controller.</p>
+						<p id="pair-error" class="form-error" role="alert"></p>
+						<button id="pair-submit" class="primary-button" type="submit">
+							<span>Pair this iPhone</span>
+							<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+						</button>
+					</form>
+					<button id="step2-back" class="secondary-button" type="button" style="margin-top:8px;width:100%">Back</button>
+				</div>
 
-				<aside class="access-warning" aria-labelledby="access-title">
-					<div class="warning-icon" aria-hidden="true">
-						<svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4L12 3Z" /><path d="M12 9v5" /><circle cx="12" cy="17" r=".8" /></svg>
+				<div id="step-3-confirm" class="pair-step" hidden>
+					<div class="pair-intro">
+						<span class="pulse-dot pulse-verified" aria-hidden="true"></span>
+						<p>Pairing successful. Confirm this device.</p>
 					</div>
-					<div>
-						<h2 id="access-title">Full host access</h2>
-						<p>This controller can instruct Pi to read, modify, and execute on the paired host as your host account.</p>
-						<p class="trust-copy">Project trust follows the host’s saved Pi setting; this mobile app does not auto-approve project resources.</p>
+					<div class="connection-summary">
+						<div class="summary-row"><span class="summary-label">Device</span><span class="summary-value" id="step3-device">This iPhone</span></div>
+						<div class="summary-row"><span class="summary-label">Session</span><span class="summary-value" id="step3-duration">12 hours</span></div>
+						<div class="summary-row"><span class="summary-label">Access</span><span class="summary-value" style="color:var(--red)">Full host access</span></div>
 					</div>
-				</aside>
+					<aside class="access-warning compact" style="margin:12px 0">
+						<div class="warning-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4L12 3Z" /><path d="M12 9v5" /><circle cx="12" cy="17" r=".8" /></svg></div>
+						<div><p>This controller can instruct Pi to read, modify, and execute on the paired host.</p></div>
+					</aside>
+					<button id="step3-confirm" class="primary-button" type="button">
+						<span>Confirm &amp; Start</span>
+						<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+					</button>
+					<button id="step3-cancel" class="secondary-button" type="button" style="margin-top:8px;width:100%">Cancel</button>
+				</div>
 
 				<p class="pair-footnote">Pair only with a host you control. Close the host service to end remote access.</p>
 			</section>
@@ -114,7 +129,7 @@
 				<button id="retry-button" type="button">Retry</button>
 			</div>
 
-			<section id="main-content" class="console-panel" aria-label="Pi agent conversation">
+			<section id="main-content" class="console-panel" data-panel="console" aria-label="Pi agent conversation">
 				<div id="session-ribbon" class="session-ribbon">
 					<div>
 						<span id="session-state">Ready</span>
@@ -153,12 +168,15 @@
 				<div id="extension-widget-below" class="extension-widget" hidden></div>
 			</section>
 
-			<section id="terminal-panel" class="terminal-panel" hidden aria-label="Terminal session">
+			<section id="terminal-panel" class="terminal-panel" data-panel="terminal" hidden aria-label="Terminal session">
 				<header id="terminal-header" class="terminal-header">
 					<div class="terminal-state-row">
 						<span class="terminal-state-label">State:</span>
 						<span class="terminal-state-value state-creating">Starting</span>
 						<span id="terminal-connection-indicator" class="connection-indicator transport-disconnected">No connection</span>
+						<button id="terminal-fullscreen-toggle" class="icon-button" type="button" aria-label="Toggle full screen" style="margin-left:auto">
+							<svg viewBox="0 0 24 24" aria-hidden="true" width="16" height="16"><path d="M8 4H4v4M16 4h4v4M8 20H4v-4M16 20h4v-4"/></svg>
+						</button>
 					</div>
 					<div id="terminal-actions" class="terminal-actions" style="display:none">
 						<button id="terminal-terminate-graceful" class="secondary-button" type="button">End session</button>
@@ -167,9 +185,76 @@
 					<div id="terminal-replay-status" class="terminal-replay-status" hidden></div>
 				</header>
 				<div id="terminal-viewport" class="terminal-viewport"></div>
+				<div id="terminal-shortcut-bar" class="terminal-shortcut-bar">
+					<button type="button" data-key="Control" title="Ctrl">Ctrl<span class="modifier-indicator" id="mod-ctrl"></span></button>
+					<button type="button" data-key="Escape" title="Escape">Esc</button>
+					<button type="button" data-key="Tab" title="Tab">Tab</button>
+					<button type="button" data-key="ArrowUp" title="Up">&#x2191;</button>
+					<button type="button" data-key="ArrowDown" title="Down">&#x2193;</button>
+					<button type="button" class="shortcut-more" id="shortcut-more" title="More keys">&#x2022;&#x2022;&#x2022;</button>
+					<div class="shortcut-secondary" id="shortcut-secondary">
+						<button type="button" data-key="Alt" title="Alt">Alt<span class="modifier-indicator" id="mod-alt"></span></button>
+						<button type="button" data-key="ArrowLeft" title="Left">&#x2190;</button>
+						<button type="button" data-key="ArrowRight" title="Right">&#x2192;</button>
+						<button type="button" data-key="PageUp" title="Page Up">PgUp</button>
+						<button type="button" data-key="PageDown" title="Page Down">PgDn</button>
+						<button type="button" data-key="Home" title="Home">Home</button>
+						<button type="button" data-key="End" title="End">End</button>
+						<button type="button" data-key="Ctrl+C" title="Ctrl+C">Ctrl+C</button>
+						<button type="button" data-key="Ctrl+D" title="Ctrl+D">Ctrl+D</button>
+						<button type="button" id="shortcut-paste" title="Paste">Paste</button>
+					</div>
+				</div>
 				<div class="terminal-footer">
 					<button id="terminal-emergency-terminate" class="emergency-button" type="button">Emergency termination</button>
 					<button id="terminal-reconnect" class="secondary-button" type="button" hidden>Reconnect</button>
+				</div>
+			</section>
+
+			<section id="files-panel" class="files-panel" data-panel="files" hidden aria-label="Workspace files">
+				<div class="panel-header">
+					<h2>Files</h2>
+					<nav id="file-breadcrumb" class="file-breadcrumb" aria-label="Breadcrumb"></nav>
+				</div>
+				<div id="file-list" class="file-list"></div>
+			</section>
+
+			<section id="diagnostics-panel" class="diagnostics-panel" data-panel="diagnostics" hidden aria-label="Gateway diagnostics">
+				<div class="panel-header">
+					<h2>Diagnostics</h2>
+				</div>
+				<div id="diagnostics-content" class="diagnostics-content">
+					<p class="empty-list">Loading diagnostics\u2026</p>
+				</div>
+			</section>
+
+			<section id="settings-panel" class="settings-panel" data-panel="settings" hidden aria-label="Settings">
+				<div class="panel-header">
+					<h2>Settings</h2>
+				</div>
+				<div class="settings-content">
+					<div class="settings-group">
+						<label class="settings-label">Density</label>
+						<div class="settings-options" data-setting="density">
+							<button class="settings-option" data-value="balanced">Balanced</button>
+							<button class="settings-option" data-value="compact">Compact</button>
+							<button class="settings-option" data-value="comfort">Comfort</button>
+						</div>
+					</div>
+					<div class="settings-group">
+						<label class="settings-label">Terminal font</label>
+						<div class="settings-options" data-setting="terminal-font">
+							<button class="settings-option" data-value="compact">Compact (13px)</button>
+							<button class="settings-option" data-value="default">Default (14px)</button>
+							<button class="settings-option" data-value="comfort">Comfort (16px)</button>
+						</div>
+					</div>
+					<div class="settings-group">
+						<label class="settings-label">Connection</label>
+						<div id="settings-connection" class="settings-info">
+							<span id="settings-host">Loading\u2026</span>
+						</div>
+					</div>
 				</div>
 			</section>
 
@@ -234,21 +319,29 @@
 			</section>
 
 			<nav class="bottom-nav" aria-label="Primary">
-				<button type="button" data-nav="chat" aria-current="page">
+				<button type="button" data-nav="console" aria-current="page">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v11H9l-4 3V5Z" /></svg>
-					<span>Chat</span>
+					<span>Console</span>
 				</button>
-				<button type="button" data-nav="shell">
+				<button type="button" data-nav="terminal">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 7 5 5-5 5M13 17h6" /></svg>
-					<span>Shell</span>
+					<span>Terminal</span>
 				</button>
-				<button type="button" data-nav="agents" aria-haspopup="dialog" aria-controls="instance-sheet">
+				<button type="button" data-nav="files">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7l2 2h7v14H4V4Z" /></svg>
+					<span>Files</span>
+				</button>
+				<button type="button" data-nav="diagnostics">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v6M12 16v.01" /></svg>
+					<span>Status</span>
+				</button>
+				<button type="button" data-nav="sessions">
 					<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M8 9h8M8 13h5M8 17h3" /></svg>
-					<span>Agents</span>
+					<span>Sessions</span>
 				</button>
-				<button type="button" data-nav="controls" aria-haspopup="dialog" aria-controls="controls-sheet">
-					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M7 12h10M10 17h4" /></svg>
-					<span>Controls</span>
+				<button type="button" data-nav="settings">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></svg>
+					<span>Settings</span>
 				</button>
 			</nav>
 		</div>
@@ -265,6 +358,43 @@
 			</header>
 			<div id="terminal-session-list" class="terminal-session-list"></div>
 			<p class="sheet-footnote">Select a session to attach and acquire its controller lease.</p>
+		</dialog>
+
+		<dialog id="session-detail-sheet" class="sheet">
+			<div class="sheet-grabber" aria-hidden="true"></div>
+			<header class="sheet-header" aria-label="Session details sheet header">
+				<div><p class="eyebrow" id="session-detail-eyebrow">Terminal session</p><h2 id="session-detail-title">Session Details</h2></div>
+				<button class="icon-button sheet-close" type="button" aria-label="Close">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+				</button>
+			</header>
+			<div class="session-detail-content" id="session-detail-content">
+				<div class="diag-section">
+					<h3>Lifecycle</h3>
+					<div class="diag-row"><span class="diag-label">State</span><span class="diag-value" id="sd-state">—</span></div>
+					<div class="diag-row"><span class="diag-label">Session ID</span><span class="diag-value" id="sd-id">—</span></div>
+					<div class="diag-row"><span class="diag-label">Workspace</span><span class="diag-value" id="sd-workspace">—</span></div>
+					<div class="diag-row"><span class="diag-label">Launcher</span><span class="diag-value" id="sd-launcher">—</span></div>
+					<div class="diag-row"><span class="diag-label">Created</span><span class="diag-value" id="sd-created">—</span></div>
+					<div class="diag-row"><span class="diag-label">Last activity</span><span class="diag-value" id="sd-activity">—</span></div>
+				</div>
+				<div class="diag-section">
+					<h3>Controller Lease</h3>
+					<div class="diag-row"><span class="diag-label">State</span><span class="diag-value" id="sd-lease-state">—</span></div>
+					<div class="diag-row"><span class="diag-label">Generation</span><span class="diag-value" id="sd-lease-gen">—</span></div>
+					<div class="diag-row"><span class="diag-label">Expires</span><span class="diag-value" id="sd-lease-expires">—</span></div>
+				</div>
+				<div class="diag-section">
+					<h3>Replay</h3>
+					<div class="diag-row"><span class="diag-label">Available</span><span class="diag-value" id="sd-replay">—</span></div>
+					<div class="diag-row"><span class="diag-label">Reconnect deadline</span><span class="diag-value" id="sd-reconnect">—</span></div>
+				</div>
+				<div class="session-detail-actions" id="session-detail-actions">
+					<button id="sd-attach" class="primary-button" type="button">Attach</button>
+					<button id="sd-terminate" class="secondary-button" type="button">End session</button>
+					<button id="sd-force" class="secondary-button danger" type="button">Force end</button>
+				</div>
+			</div>
 		</dialog>
 
 		<dialog id="instance-sheet" class="sheet">
@@ -382,6 +512,7 @@
 		</template>
 
 		<noscript>Pi Pocket Console requires JavaScript to connect to the host.</noscript>
+		<script src="/platform.js"></script>
 		<script src="/xterm.js"></script>
 		<script src="/terminal.js" defer></script>
 		<script src="/app.js" defer></script>

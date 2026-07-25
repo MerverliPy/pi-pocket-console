@@ -115,7 +115,18 @@ function showPairing() {
 	state.eventSource = null;
 	elements.appShell.hidden = true;
 	elements.pairScreen.hidden = false;
-	elements.pairCode.focus({ preventScroll: true });
+	byId("step-1-connection").hidden = false;
+	byId("step-2-pair").hidden = true;
+	byId("step-3-confirm").hidden = true;
+}
+
+function showPairStep(step) {
+	byId("step-1-connection").hidden = step !== 1;
+	byId("step-2-pair").hidden = step !== 2;
+	byId("step-3-confirm").hidden = step !== 3;
+	if (step === 2) {
+		elements.pairCode.focus({ preventScroll: true });
+	}
 }
 
 function showApplication() {
@@ -182,8 +193,8 @@ async function pair(event) {
 	try {
 		const result = await api("/api/pair", { method: "POST", body: { code } });
 		state.csrfToken = result.csrfToken;
-		await bootstrap();
-		announce("This iPhone is paired.");
+		showPairStep(3);
+		announce("Pairing code accepted. Confirm this device.");
 	} catch (error) {
 		elements.pairError.textContent = error.message;
 	} finally {
@@ -1467,6 +1478,21 @@ function setupInstallPrompt() {
 
 function bindEvents() {
 	elements.pairForm.addEventListener("submit", pair);
+	byId("step1-continue").addEventListener("click", () => showPairStep(2));
+	byId("step2-back").addEventListener("click", () => showPairStep(1));
+	byId("step3-confirm").addEventListener("click", async () => {
+		try {
+			await bootstrap();
+			announce("This iPhone is paired.");
+		} catch (error) {
+			toast(error.message, "error");
+			showPairStep(2);
+		}
+	});
+	byId("step3-cancel").addEventListener("click", () => {
+		state.csrfToken = "";
+		showPairStep(1);
+	});
 	elements.pairCode.addEventListener("input", () => {
 		elements.pairCode.value = formatPairCode(elements.pairCode.value);
 		elements.pairError.textContent = "";

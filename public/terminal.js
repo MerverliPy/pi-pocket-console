@@ -488,6 +488,69 @@
 		}).then((r) => r.json());
 	}
 
+	function showSessionDetail(session, csrfToken) {
+		const sheet = document.getElementById("session-detail-sheet");
+		if (!sheet || typeof sheet.showModal !== "function") return;
+		const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || "—"; };
+		setText("sd-state", session.state);
+		setText("sd-id", session.sessionId?.slice(0, 12) || "—");
+		setText("sd-workspace", session.workspaceId || "—");
+		setText("sd-launcher", session.launcherId || "—");
+		setText("sd-created", session.createdAt ? new Date(session.createdAt).toLocaleString() : "—");
+		setText("sd-activity", session.lastActivityAt ? new Date(session.lastActivityAt).toLocaleString() : "—");
+		const lease = session.lease || {};
+		setText("sd-lease-state", lease.state || "none");
+		setText("sd-lease-gen", lease.generation !== undefined ? String(lease.generation) : "—");
+		setText("sd-lease-expires", lease.expiresAt ? new Date(lease.expiresAt).toLocaleString() : "—");
+		setText("sd-replay", session.reconnectPolicy?.replayAvailable ? "Available" : "N/A");
+		setText("sd-reconnect", session.reconnectPolicy?.deadlineSeconds ? `${session.reconnectPolicy.deadlineSeconds}s` : "—");
+		document.getElementById("sheet-backdrop")?.removeAttribute("hidden");
+		sheet.showModal();
+
+		const attachBtn = document.getElementById("sd-attach");
+		const termBtn = document.getElementById("sd-terminate");
+		const forceBtn = document.getElementById("sd-force");
+		if (attachBtn) {
+			attachBtn.onclick = null;
+			attachBtn.addEventListener("click", () => {
+				if (window.TerminalUI) window.TerminalUI.attach(session.sessionId, csrfToken);
+				sheet.close();
+				document.getElementById("sheet-backdrop")?.setAttribute("hidden", "");
+			}, { once: true });
+		}
+		if (termBtn) {
+			termBtn.onclick = null;
+			termBtn.addEventListener("click", () => {
+				if (confirm("Terminate this terminal session?")) {
+					terminateSession(session.sessionId, "graceful", csrfToken).then(() => {
+						showToast("Session terminating\u2026");
+						sheet.close();
+						document.getElementById("sheet-backdrop")?.setAttribute("hidden", "");
+						loadSessionList(csrfToken);
+						if (window.TerminalUI) window.TerminalUI.refreshSessions(csrfToken);
+					});
+				}
+			}, { once: true });
+		}
+		if (forceBtn) {
+			forceBtn.onclick = null;
+			forceBtn.addEventListener("click", () => {
+				if (confirm("Force terminate? This may leave processes running on the host.")) {
+					terminateSession(session.sessionId, "force", csrfToken).then(() => {
+						showToast("Force termination requested");
+						sheet.close();
+						document.getElementById("sheet-backdrop")?.setAttribute("hidden", "");
+						loadSessionList(csrfToken);
+					});
+				}
+			}, { once: true });
+		}
+		sheet.querySelector(".sheet-close")?.addEventListener("click", () => {
+			sheet.close();
+			document.getElementById("sheet-backdrop")?.setAttribute("hidden", "");
+		}, { once: true });
+	}
+
 	function loadSessionList(csrfToken) {
 		return fetch("/api/v1/terminals", {
 			headers: { "X-CSRF-Token": csrfToken },
@@ -498,7 +561,7 @@
 				if (!list) return;
 				const sessions = result.data?.terminals || [];
 				if (sessions.length === 0) {
-					list.innerHTML = '<p class="empty-sessions">No terminal sessions.</p>';
+					list.innerHTML = '<div class="empty-state-content"><svg class="micro-illustration" viewBox="0 0 64 64" aria-hidden="true"><rect x="12" y="16" width="40" height="32" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 28h40" stroke="currentColor" stroke-width="2"/><circle cx="20" cy="22" r="2" fill="currentColor"/><circle cx="26" cy="22" r="2" fill="currentColor"/></svg><p>No terminal sessions.</p><p style="font-size:12px;margin-top:4px">Start a session from the terminal tab.</p></div>';
 					return;
 				}
 				list.innerHTML = sessions
@@ -512,6 +575,245 @@
 			`,
 					)
 					.join("");
+				list.querySelectorAll(".session-item").forEach((btn) => {
+					const sid = btn.dataset.sessionId;
+					const session = sessions.find((s) => s.sessionId === sid);
+					if (session) {
+						btn.addEventListener("click", () => showSessionDetail(session, csrfToken));
+					}
+				});
+			});
+	}
+
+	let modifierState = { ctrl: false, alt: false };
+	let modifierPhase = { ctrl: "off", alt: "off" };
+
+	function resetModifier(key) {
+		modifierPhase[key] = "off";
+		modifierState[key] = false;
+		const ind = document.getElementById(`mod-${key}`);
+		if (ind) { ind.className = "modifier-indicator"; }
+	}
+
+	function cycleModifier(key) {
+		switch (modifierPhase[key]) {
+			case "off":
+				modifierPhase[key] = "sticky";
+				modifierState[key] = true;
+				break;
+			case "sticky":
+				modifierPhase[key] = "locked";
+				break;
+			case "locked":
+				resetModifier(key);
+				break;
+		}
+		const ind = document.getElementById(`mod-${key}`);
+		if (ind) {
+			ind.className = `modifier-indicator ${modifierPhase[key] !== "off" ? "active" : ""} ${modifierPhase[key] === "locked" ? "locked" : ""}`;
+		}
+	}
+
+	function sendKey(key) {
+		if (!currentLease || pendingInput || !ws || ws.readyState !== WebSocket.OPEN) return;
+		let data = "";
+		if (modifierState.ctrl) {
+			if (key === "c") { data = "\x03"; resetModifier("ctrl"); }
+			else if (key === "d") { data = "\x04"; resetModifier("ctrl"); }
+			else if (key === "z") { data = "\x1a"; resetModifier("ctrl"); }
+			else if (key === "a") { data = "\x01"; resetModifier("ctrl"); }
+			else if (key === "e") { data = "\x05"; resetModifier("ctrl"); }
+			else if (key === "u") { data = "\x15"; resetModifier("ctrl"); }
+			else if (key === "w") { data = "\x17"; resetModifier("ctrl"); }
+			else if (key === "l") { data = "\x0c"; resetModifier("ctrl"); }
+			else { data = key; resetModifier("ctrl"); }
+		} else {
+			switch (key) {
+				case "Enter": data = "\r"; break;
+				case "Escape": case "Esc": data = "\x1b"; break;
+				case "Tab": data = modifierState.alt ? "\x1b\x09" : "\x09"; break;
+				case "ArrowUp": data = "\x1b[A"; break;
+				case "ArrowDown": data = "\x1b[B"; break;
+				case "ArrowLeft": data = modifierState.alt ? "\x1b\x1b[D" : "\x1b[D"; break;
+				case "ArrowRight": data = modifierState.alt ? "\x1b\x1b[C" : "\x1b[C"; break;
+				case "PageUp": data = "\x1b[5~"; break;
+				case "PageDown": data = "\x1b[6~"; break;
+				case "Home": data = "\x1b[H"; break;
+				case "End": data = "\x1b[F"; break;
+				case "Ctrl+C": data = "\x03"; break;
+				case "Ctrl+D": data = "\x04"; break;
+				case "Alt": cycleModifier("alt"); return;
+				case "Control": cycleModifier("ctrl"); return;
+				default: data = key; break;
+			}
+		}
+		if (data) {
+			pendingInput = true;
+			sendEnvelope({
+				type: MESSAGE_TYPES.TERMINAL_INPUT,
+				payload: { leaseId: currentLease.leaseId, leaseGeneration: currentLease.generation, data },
+			});
+		}
+	}
+
+	function initShortcutBar() {
+		const bar = document.getElementById("terminal-shortcut-bar");
+		if (!bar) return;
+		bar.addEventListener("click", (e) => {
+			const btn = e.target.closest("button[data-key]");
+			if (btn) {
+				if (window.PocketUI) window.PocketUI.haptic(10);
+				sendKey(btn.dataset.key);
+				return;
+			}
+			if (e.target.id === "shortcut-more" || e.target.closest("#shortcut-more")) {
+				const sec = document.getElementById("shortcut-secondary");
+				if (sec) sec.classList.toggle("visible");
+				return;
+			}
+		});
+		const pasteBtn = document.getElementById("shortcut-paste");
+		if (pasteBtn) {
+			pasteBtn.addEventListener("click", async () => {
+				try {
+					const text = await navigator.clipboard.readText();
+					if (text && currentLease) {
+						pendingInput = true;
+						sendEnvelope({
+							type: MESSAGE_TYPES.TERMINAL_INPUT,
+							payload: { leaseId: currentLease.leaseId, leaseGeneration: currentLease.generation, data: text },
+						});
+					}
+				} catch { showToast("Cannot paste: clipboard access denied", "warning"); }
+			});
+		}
+	}
+
+	function loadDiagnostics(csrfToken) {
+		fetch("/api/v1/diagnostics", { headers: { "X-CSRF-Token": csrfToken } })
+			.then((r) => r.json())
+			.then((result) => {
+				const el = document.getElementById("diagnostics-content");
+				if (!el) return;
+				const data = result.data || result;
+				el.innerHTML = `
+					<div class="diag-section">
+						<h3>Gateway</h3>
+						<div class="diag-row"><span class="diag-label">Status</span><span class="diag-value">${data.gateway?.status || "unknown"}</span></div>
+						<div class="diag-row"><span class="diag-label">Address</span><span class="diag-value">${data.gateway?.boundAddress || "unknown"}</span></div>
+					</div>
+					<div class="diag-section">
+						<h3>Tailscale</h3>
+						<div class="diag-row"><span class="diag-label">Serve</span><span class="diag-value">${data.tailscale?.serveConfigured ? "Configured" : "Not detected"}</span></div>
+						<div class="diag-row"><span class="diag-label">Funnel</span><span class="diag-value">${data.tailscale?.funnelEnabled ? "WARNING: Enabled" : "Disabled"}</span></div>
+					</div>
+					<div class="diag-section">
+						<h3>Authentication</h3>
+						<div class="diag-row"><span class="diag-label">Status</span><span class="diag-value">${data.authentication?.authenticated ? "Authenticated" : "Guest"}</span></div>
+						${data.authentication?.expiresAt ? `<div class="diag-row"><span class="diag-label">Expires</span><span class="diag-value">${new Date(data.authentication.expiresAt).toLocaleString()}</span></div>` : ""}
+					</div>
+					<div class="diag-section">
+						<h3>Recent Events (${(data.redactedEvents || []).length})</h3>
+						${(data.redactedEvents || []).slice(0, 10).map((ev) => `
+							<div class="diag-event" onclick="this.querySelector('.diag-event-detail').hidden = !this.querySelector('.diag-event-detail').hidden">
+								<div><span class="diag-label">${ev.code}</span> — ${ev.message}</div>
+								<div class="diag-event-detail" hidden>${ev.timestamp ? new Date(ev.timestamp).toLocaleString() : ""} ${ev.safeNextAction ? "· " + ev.safeNextAction : ""}</div>
+							</div>
+						`).join("")}
+					</div>
+				`;
+			})
+			.catch(() => {});
+	}
+
+	function loadSettings(csrfToken) {
+		fetch("/api/v1/bootstrap", { headers: { "X-CSRF-Token": csrfToken } })
+			.then((r) => r.json())
+			.then((data) => {
+				const el = document.getElementById("settings-host");
+				if (el) el.textContent = (data.workspaceRoot || "Unknown") + " · " + (data.workspaceName || "");
+			})
+			.catch(() => {});
+		const densityContainer = document.querySelector('[data-setting="density"]');
+		if (densityContainer) {
+			const current = localStorage.getItem("pocket:density") || "balanced";
+			for (const btn of densityContainer.querySelectorAll(".settings-option")) {
+				btn.setAttribute("aria-pressed", String(btn.dataset.value === current));
+				btn.addEventListener("click", () => {
+					if (window.PocketUI) {
+						window.PocketUI.density.apply(btn.dataset.value);
+						for (const b of densityContainer.querySelectorAll(".settings-option")) {
+							b.setAttribute("aria-pressed", "false");
+						}
+						btn.setAttribute("aria-pressed", "true");
+					}
+				});
+			}
+		}
+		const fontContainer = document.querySelector('[data-setting="terminal-font"]');
+		if (fontContainer) {
+			const current = localStorage.getItem("pocket:terminal-font") || "default";
+			for (const btn of fontContainer.querySelectorAll(".settings-option")) {
+				btn.setAttribute("aria-pressed", String(btn.dataset.value === current));
+				btn.addEventListener("click", () => {
+					const sizeMap = { compact: "13", default: "14", comfort: "16" };
+					const size = sizeMap[btn.dataset.value];
+					if (size && terminalInstance) {
+						terminalInstance.options.fontSize = Number(size);
+						setTimeout(() => fitAddon?.fit(), 50);
+					}
+					localStorage.setItem("pocket:terminal-font", btn.dataset.value);
+					for (const b of fontContainer.querySelectorAll(".settings-option")) {
+						b.setAttribute("aria-pressed", "false");
+					}
+					btn.setAttribute("aria-pressed", "true");
+				});
+			}
+		}
+	}
+
+	function loadFiles(csrfToken, dirPath) {
+		const list = document.getElementById("file-list");
+		const breadcrumb = document.getElementById("file-breadcrumb");
+		if (!list) return;
+		list.innerHTML = '<p class="empty-list">Loading\u2026</p>';
+		const url = dirPath ? `/api/v1/files?path=${encodeURIComponent(dirPath)}` : "/api/v1/files";
+		fetch(url, { headers: { "X-CSRF-Token": csrfToken } })
+			.then((r) => r.json())
+			.then((result) => {
+				const data = result.data || result;
+				if (breadcrumb) {
+					const parts = data.path ? data.path.split("/").filter(Boolean) : [];
+					const crumbHtml = parts.map((p, i) => {
+						const path = "/" + parts.slice(0, i + 1).join("/");
+						return `<button class="crumb" data-path="${path}">${p}</button>`;
+					}).join(" / ");
+					breadcrumb.innerHTML = `<button class="crumb" data-path="${data.path}">${data.name || ""}</button>` + (crumbHtml ? " / " + crumbHtml : "");
+					breadcrumb.querySelectorAll(".crumb").forEach((btn) => {
+						btn.addEventListener("click", () => loadFiles(csrfToken, btn.dataset.path));
+					});
+				}
+				const files = data.files || [];
+				if (files.length === 0) {
+					list.innerHTML = '<div class="empty-state-content"><svg class="micro-illustration" viewBox="0 0 64 64" aria-hidden="true"><path d="M16 12h14l4 4h16v36H16V12Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 28h34M16 38h28" stroke="currentColor" stroke-width="2" opacity="0.5"/></svg><p>This workspace is empty.</p></div>';
+					return;
+				}
+				list.innerHTML = files.map((f) => `
+					<button class="file-row" data-type="${f.type}" data-name="${f.name}" data-path="${data.path || ""}/${f.name}">
+						<span class="file-icon">${f.type === "directory" ? `
+							<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 4h7l2 2h7v14H4V4Z" fill="currentColor" opacity="0.7"/></svg>` : `
+							<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 3h8l6 6v12H6V3Z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M14 3v6h6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>`}
+						</span>
+						<span class="file-name">${f.name}</span>
+						${f.size ? `<small class="file-meta">${(f.size / 1024).toFixed(1)} KB</small>` : ""}
+					</button>
+				`).join("");
+				list.querySelectorAll(".file-row[data-type='directory']").forEach((btn) => {
+					btn.addEventListener("click", () => loadFiles(csrfToken, btn.dataset.path));
+				});
+			})
+			.catch(() => {
+				list.innerHTML = '<p class="empty-list error">Failed to load files.</p>';
 			});
 	}
 
@@ -520,7 +822,11 @@
 			const container = byId(TERMINAL_CONTAINER_ID);
 			if (!container) return;
 			initTerminal(container);
+			initShortcutBar();
 			loadSessionList(csrfToken);
+			loadDiagnostics(csrfToken);
+			loadSettings(csrfToken);
+			loadFiles(csrfToken);
 
 			const gracefulBtn = byId(GRACEFUL_TERMINATE_ID);
 			const forceBtn = byId(FORCE_TERMINATE_ID);
@@ -596,6 +902,13 @@
 
 		refreshSessions(csrfToken) {
 			loadSessionList(csrfToken);
+		},
+
+		refreshDiagnostics(csrfToken) {
+			loadDiagnostics(csrfToken);
+		},
+		refreshFiles(csrfToken) {
+			loadFiles(csrfToken);
 		},
 	};
 })();

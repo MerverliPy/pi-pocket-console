@@ -1,11 +1,15 @@
 const CACHE_PREFIX = "pi-pocket-shell";
-const CACHE_NAME = `${CACHE_PREFIX}-v1`;
+const CACHE_NAME = `${CACHE_PREFIX}-v2`;
 
 const SHELL_PATHS = new Set([
 	"/",
 	"/index.html",
 	"/app.css",
 	"/app.js",
+	"/platform.js",
+	"/terminal.js",
+	"/xterm.css",
+	"/xterm.js",
 	"/manifest.webmanifest",
 	"/icon.svg",
 	"/icon-192.png",
@@ -53,10 +57,13 @@ self.addEventListener("fetch", (event) => {
 	event.respondWith(
 		caches.open(CACHE_NAME).then(async (cache) => {
 			const cached = await cache.match(request, { ignoreSearch: true });
-			if (cached) {
-				return cached;
-			}
-			return fetch(request);
+			const fetchPromise = fetch(request).then((response) => {
+				if (response.ok) {
+					cache.put(request, response.clone());
+				}
+				return response;
+			}).catch(() => cached);
+			return cached || fetchPromise;
 		}),
 	);
 });

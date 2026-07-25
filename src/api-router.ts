@@ -220,6 +220,10 @@ export class ApiRouter {
 				return true;
 			}
 
+			if (pathname === "/api/v1/files" && method === "GET") {
+				return await this.handleListFiles(response, requestId);
+			}
+
 			if (pathname === "/api/v1/workspaces" && method === "GET") {
 				return this.handleListWorkspaces(response, requestId);
 			}
@@ -594,6 +598,44 @@ export class ApiRouter {
 			redactedEvents: recentEvents,
 		};
 		sendApiSuccess(response, requestId, data);
+		return true;
+	}
+
+	private async handleListFiles(response: ServerResponse, requestId: string): Promise<true> {
+		const { readdir, stat } = await import("node:fs/promises");
+		const { resolve, basename, relative } = await import("node:path");
+		try {
+			const { URLSearchParams } = await import("node:url");
+			const query = new URLSearchParams("");
+			let targetDir = this.deps.workspaceRoot;
+			const entries = await readdir(targetDir, { withFileTypes: true });
+			const files = [];
+			for (const e of entries) {
+				if (e.name.startsWith(".")) continue;
+				const fullPath = resolve(targetDir, e.name);
+				const isDir = e.isDirectory();
+				let size = 0;
+				let modifiedAt = "";
+				try {
+					const s = await stat(fullPath);
+					if (s.isFile()) size = s.size;
+					modifiedAt = s.mtime.toISOString();
+				} catch {}
+				files.push({ name: e.name, type: isDir ? "directory" : "file", size, modifiedAt });
+			}
+			files.sort((a, b) => {
+				if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
+				return a.name.localeCompare(b.name);
+			});
+			const relPath = relative(this.deps.workspaceRoot, targetDir);
+			sendApiSuccess(response, requestId, {
+				files,
+				path: targetDir,
+				name: relPath ? relPath : basename(targetDir),
+			});
+		} catch {
+			sendApiFailure(response, requestId, "FILES_ERROR", "Failed to list workspace files", 500);
+		}
 		return true;
 	}
 }

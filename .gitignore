@@ -7,4 +7,6 @@ coverage/
 .env
 .env.*
 *.tsbuildinfo
+public/xterm.css
+public/xterm.js
 
