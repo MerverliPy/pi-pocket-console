@@ -76,6 +76,7 @@ const state = {
 let streamingMessage = null;
 let streamingText = "";
 let activeBashCard = null;
+let modelRefreshPromise = null;
 
 function announce(message) {
 	elements.announcer.textContent = "";
@@ -538,7 +539,7 @@ function applySessionState(session) {
 function updateRuntimeLabels() {
 	const model = state.model;
 	elements.modelLabel.textContent = model
-		? model.name || model.id || model.modelId || `${model.provider || ""}/${model.id || ""}`
+		? model.name || model.modelId || model.id || `${model.provider || ""}/${model.modelId || model.id || ""}`
 		: "Not selected";
 	elements.thinkingLabel.textContent = state.thinkingLevel || "off";
 }
@@ -910,21 +911,63 @@ function handleEvent(event) {
 	}
 }
 
+async function refreshModels() {
+	if (modelRefreshPromise) {
+		return modelRefreshPromise;
+	}
+	elements.modelList.replaceChildren();
+	const loading = document.createElement("p");
+	loading.className = "empty-list";
+	loading.textContent = "Loading models…";
+	elements.modelList.append(loading);
+	modelRefreshPromise = (async () => {
+		try {
+			const response = await rpc({ type: "get_available_models" }, { quiet: true });
+			if (response?.data?.models) {
+				state.models = response.data.models;
+			} else if (Array.isArray(response)) {
+				state.models = response;
+			}
+			renderModels();
+		} catch (error) {
+			state.models = [];
+			elements.modelList.replaceChildren();
+			const msg = document.createElement("p");
+			msg.className = "empty-list error";
+			msg.textContent = error?.message || "Model discovery failed.";
+			elements.modelList.append(msg);
+			const retry = document.createElement("button");
+			retry.className = "retry-button";
+			retry.type = "button";
+			retry.textContent = "Retry";
+			retry.addEventListener("click", () => {
+				modelRefreshPromise = null;
+				void refreshModels();
+			});
+			elements.modelList.append(retry);
+		} finally {
+			modelRefreshPromise = null;
+		}
+	})();
+	return modelRefreshPromise;
+}
+
 function renderModels() {
 	elements.modelList.replaceChildren();
 	if (!state.models.length) {
-		renderEmpty(elements.modelList, "No configured models were returned by the host.");
+		renderEmpty(elements.modelList, "No models available.");
 		return;
 	}
 	for (const model of state.models) {
-		const button = optionButton(
-			model.name || model.id,
-			model.provider ? `${model.provider} · ${model.id}` : model.id,
-			state.model && model.id === state.model.id && model.provider === state.model.provider,
-		);
+		const modelId = model.modelId || model.id;
+		const provider = model.provider || "";
+		const name = model.name || modelId;
+		const selected =
+			state.model && (state.model.modelId || state.model.id) === modelId && state.model.provider === provider;
+		const button = optionButton(name, provider ? `${provider} · ${modelId}` : modelId, selected);
 		button.addEventListener("click", async () => {
 			try {
-				await rpc({ type: "set_model", provider: model.provider, modelId: model.id });
+				await rpc({ type: "set_model", provider, modelId });
 				state.model = model;
 				updateRuntimeLabels();
 				renderModels();
@@ -1432,7 +1475,10 @@ function bindEvents() {
 	elements.instanceButton.addEventListener("click", () => openSheet(byId("instance-sheet")));
 	byId("more-button").addEventListener("click", () => openSheet(byId("controls-sheet")));
 	elements.commandsButton.addEventListener("click", () => openSheet(byId("commands-sheet")));
-	elements.modelButton.addEventListener("click", () => openSheet(byId("model-sheet")));
+	elements.modelButton.addEventListener("click", () => {
+		openSheet(byId("model-sheet"));
+		void refreshModels();
+	});
 	elements.thinkingButton.addEventListener("click", () => openSheet(byId("thinking-sheet")));
 	elements.sheetBackdrop.addEventListener("click", closeSheets);
 	for (const button of document.querySelectorAll(".sheet-close")) {

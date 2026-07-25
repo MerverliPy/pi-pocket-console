@@ -1729,6 +1729,24 @@ dialog {
 	text-align: center;
 }
 
+.empty-list.error {
+	color: var(--red);
+	border-color: rgba(255, 129, 125, 0.25);
+}
+
+.retry-button {
+	display: block;
+	margin: 8px auto 0;
+	padding: 10px 24px;
+	border: 1px solid var(--line-strong);
+	border-radius: 12px;
+	background: var(--panel-high);
+	color: var(--text);
+	font-size: 14px;
+	min-height: 44px;
+	cursor: pointer;
+}
+
 .toast-stack {
 	position: fixed;
 	z-index: 50;

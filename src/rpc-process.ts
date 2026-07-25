@@ -11,13 +11,22 @@ import type {
 
 export type RpcOutboundMessage = AgentSessionEvent | RpcExtensionUIRequest | RpcResponse;
 
+const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
+const MAX_LINE_LENGTH = 1_048_576;
+const MAX_BUFFER_SIZE = 8 * MAX_LINE_LENGTH;
+
 interface PendingRequest {
 	resolve(response: RpcResponse): void;
 	reject(error: Error): void;
+	timer?: ReturnType<typeof setTimeout>;
 }
 
 export function resolveRpcEntryPath(): string {
 	return fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent/rpc-entry"));
+}
+
+function isMinimalRpcResponse(value: unknown): value is { type: string; id?: string } {
+	return typeof value === "object" && value !== null && typeof (value as Record<string, unknown>).type === "string";
 }
 
 export class PocketRpcProcess {
@@ -25,15 +34,18 @@ export class PocketRpcProcess {
 
 	private exited = false;
 	private exitNotified = false;
+	private disposed = false;
 	private nextRequestId = 0;
 	private stdoutBuffer = "";
 	private stderrBuffer = "";
+	private readonly commandTimeoutMs: number;
 	private readonly pendingRequests = new Map<string, PendingRequest>();
 	private readonly messageListeners = new Set<(message: RpcOutboundMessage) => void>();
 	private readonly exitListeners = new Set<(error?: Error) => void>();
 
-	constructor(cwd: string) {
-		this.child = spawn(process.execPath, [resolveRpcEntryPath()], {
+	constructor(cwd: string, commandTimeoutMs?: number, entryPath?: string) {
+		this.commandTimeoutMs = commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS;
+		this.child = spawn(process.execPath, [entryPath ?? resolveRpcEntryPath()], {
 			cwd,
 			env: process.env,
 			stdio: ["pipe", "pipe", "pipe"],
@@ -47,16 +59,27 @@ export class PocketRpcProcess {
 	private attachListeners(): void {
 		this.child.stdout?.setEncoding("utf8");
 		this.child.stdout?.on("data", (chunk: string) => {
+			if (this.stdoutBuffer.length + chunk.length > MAX_BUFFER_SIZE) {
+				this.handleExit(new Error("Pi RPC stdout buffer exceeded maximum size"));
+				this.child.kill("SIGTERM");
+				return;
+			}
 			this.stdoutBuffer += chunk;
 			for (;;) {
 				const newlineIndex = this.stdoutBuffer.indexOf("\n");
 				if (newlineIndex === -1) {
 					break;
 				}
-				const line = this.stdoutBuffer.slice(0, newlineIndex).trim();
+				const line = this.stdoutBuffer.slice(0, newlineIndex);
 				this.stdoutBuffer = this.stdoutBuffer.slice(newlineIndex + 1);
-				if (line) {
-					this.handleLine(line);
+				if (line.length > MAX_LINE_LENGTH) {
+					this.handleExit(new Error(`Pi RPC emitted a line exceeding ${MAX_LINE_LENGTH} bytes`));
+					this.child.kill("SIGTERM");
+					return;
+				}
+				const trimmed = line.trim();
+				if (trimmed) {
+					this.handleLine(trimmed);
 				}
 			}
 		});
@@ -80,9 +103,9 @@ export class PocketRpcProcess {
 	}
 
 	private handleLine(line: string): void {
-		let parsed: RpcOutboundMessage;
+		let parsed: unknown;
 		try {
-			parsed = JSON.parse(line) as RpcOutboundMessage;
+			parsed = JSON.parse(line);
 		} catch (error) {
 			this.handleExit(
 				new Error(`Pi RPC emitted invalid JSON: ${error instanceof Error ? error.message : String(error)}`),
@@ -91,8 +114,12 @@ export class PocketRpcProcess {
 			return;
 		}
 
+		if (!isMinimalRpcResponse(parsed)) {
+			return;
+		}
+
 		for (const listener of this.messageListeners) {
-			listener(parsed);
+			listener(parsed as RpcOutboundMessage);
 		}
 
 		if (parsed.type !== "response" || !parsed.id) {
@@ -103,15 +130,24 @@ export class PocketRpcProcess {
 			return;
 		}
 		this.pendingRequests.delete(parsed.id);
-		pending.resolve(parsed);
+		clearTimeout(pending.timer);
+		pending.resolve(parsed as RpcResponse);
+	}
+
+	private clearAllPendingRequests(error: Error): void {
+		for (const [id, pending] of this.pendingRequests) {
+			this.pendingRequests.delete(id);
+			clearTimeout(pending.timer);
+			pending.reject(error);
+		}
 	}
 
 	private handleExit(error: Error): void {
-		this.exited = true;
-		for (const [id, pending] of this.pendingRequests) {
-			this.pendingRequests.delete(id);
-			pending.reject(error);
+		if (this.exited) {
+			return;
 		}
+		this.exited = true;
+		this.clearAllPendingRequests(error);
 		if (this.exitNotified) {
 			return;
 		}
@@ -128,13 +164,24 @@ export class PocketRpcProcess {
 		const id = command.id ?? `pocket_${++this.nextRequestId}_${randomUUID()}`;
 		const fullCommand = { ...command, id };
 		return new Promise<RpcResponse>((resolve, reject) => {
-			this.pendingRequests.set(id, { resolve, reject });
-			this.child.stdin?.write(`${JSON.stringify(fullCommand)}\n`, (error) => {
-				if (!error) {
-					return;
+			const timer = setTimeout(() => {
+				if (this.pendingRequests.delete(id)) {
+					reject(new Error(`Command "${command.type}" timed out after ${this.commandTimeoutMs}ms (id=${id})`));
 				}
-				this.pendingRequests.delete(id);
-				reject(error);
+			}, this.commandTimeoutMs);
+			timer.unref();
+			if (this.pendingRequests.has(id)) {
+				clearTimeout(timer);
+				reject(new Error(`Duplicate request id: ${id}`));
+				return;
+			}
+			this.pendingRequests.set(id, { resolve, reject, timer });
+			this.child.stdin?.write(`${JSON.stringify(fullCommand)}\n`, (error) => {
+				if (error) {
+					this.pendingRequests.delete(id);
+					clearTimeout(timer);
+					reject(error);
+				}
 			});
 		});
 	}
@@ -157,7 +204,13 @@ export class PocketRpcProcess {
 	}
 
 	async dispose(): Promise<void> {
+		if (this.disposed) {
+			return;
+		}
+		this.disposed = true;
 		this.messageListeners.clear();
+		const exitError = new Error("Pi RPC process was disposed");
+		this.clearAllPendingRequests(exitError);
 		if (this.exited) {
 			return;
 		}
