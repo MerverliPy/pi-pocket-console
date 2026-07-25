@@ -1,0 +1,15 @@
+Phase 1A Validation Results
+===========================
+Timestamp: to-be-filled-by-validation
+
+npm run check:
+STATUS: to-be-filled
+
+npm test:
+STATUS: to-be-filled
+
+npm run build:
+STATUS: to-be-filled
+
+git diff --check:
+STATUS: to-be-filled

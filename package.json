@@ -45,6 +45,7 @@
 		"coding-agent",
 		"iphone",
 		"pwa",
-		"remote-terminal"
+		"remote-terminal",
+		"hybrid-terminal"
 	]
 }
