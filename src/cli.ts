@@ -215,7 +215,7 @@ async function run(): Promise<void> {
 			.close()
 			.then(() => exit(0))
 			.catch((error: unknown) => {
-				console.error(error);
+				console.error(error instanceof Error ? error.message : String(error));
 				exit(1);
 			});
 	};
