@@ -122,9 +122,11 @@ export class InstanceManager implements InstanceController {
 			});
 			return clone(live.record);
 		} catch (error) {
-			this.update(live, { status: "error" });
+			live.unsubscribeMessage?.();
+			live.unsubscribeExit?.();
 			await live.process?.dispose();
 			live.process = undefined;
+			this.instances.delete(live.record.id);
 			throw error;
 		}
 	}
