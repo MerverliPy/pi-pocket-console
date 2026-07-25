@@ -90,7 +90,7 @@ loopback and is intentionally unsuitable for remote iPhone access.
 | Sessions | Live state and message hydration plus a guarded new-session action |
 | Rich input | Image prompts and Pi extension confirmation, select, input, and editor dialogs |
 | Shell | Streamed Pi RPC `bash` execution; non-interactive and not a PTY |
-| Instances | One Pi RPC child per live instance, always started in the configured workspace |
+| Instances | One Pi RPC child per live instance, always started in the configured workspace, with a configurable capacity cap (default 1) |
 | Control | A renewable single-controller lease prevents two devices from driving one instance at once |
 | Offline behavior | App-shell availability and local draft preservation; commands never execute offline |
 | Credentials | Provider credentials and Pi configuration remain on the host |
@@ -109,12 +109,13 @@ pi-pocket --workspace <path> --local-insecure [options]
 | `--host <host>` | Listener address; defaults to `127.0.0.1` |
 | `--port <port>` | Listener port; defaults to `31415` |
 | `--local-insecure` | Loopback-only HTTP preview |
+| `--max-instances <n>` | Maximum concurrent live Pi instances; defaults to `1` |
 | `--tls-cert <path>` and `--tls-key <path>` | Native HTTPS alternative; both are required together |
 
-`PI_POCKET_WORKSPACE`, `PI_POCKET_ORIGIN`, `PI_POCKET_HOST`, and
-`PI_POCKET_PORT` are equivalent environment variables. Run
-`npm run dev -- --help` or `pi-pocket --help` after installation for the full
-reference.
+`PI_POCKET_WORKSPACE`, `PI_POCKET_ORIGIN`, `PI_POCKET_HOST`,
+`PI_POCKET_PORT`, and `PI_POCKET_MAX_INSTANCES` are equivalent environment
+variables. Run `npm run dev -- --help` or `pi-pocket --help` after installation
+for the full reference.
 
 ## Security and limitations
 
@@ -127,6 +128,8 @@ Treat access to Pi Pocket Console like shell access to the host:
 - Pairing is a rate-limited one-time code, not a passkey. Device sessions last
   up to 12 hours in memory; restarting the gateway revokes them and generates
   a new code.
+- Live Pi instances are capped at 1 by default. Increase with
+  `--max-instances` or `PI_POCKET_MAX_INSTANCES` up to a sensible host limit.
 - Gateway instances, controller leases, and conversation state are not a
   durable session service. A restart removes them, even if Pi has written its
   own session files on disk.

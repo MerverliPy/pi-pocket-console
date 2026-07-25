@@ -1481,6 +1481,30 @@ dialog {
 	font-size: 10px;
 }
 
+.capacity-info {
+	display: flex;
+	margin-top: 17px;
+	padding: 12px;
+	gap: 9px;
+	align-items: flex-start;
+	border: 1px solid var(--amber-wash);
+	border-radius: 12px;
+	background: var(--amber-wash);
+	color: var(--amber);
+	font-size: 13px;
+	line-height: 1.4;
+}
+
+.capacity-info svg {
+	width: 18px;
+	height: 18px;
+	flex-shrink: 0;
+	margin-top: 1px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.5;
+}
+
 .spawn-form {
 	margin-top: 17px;
 	padding-top: 15px;

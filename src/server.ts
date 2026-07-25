@@ -20,7 +20,7 @@ const MAX_SSE_HISTORY_BYTES = 2 * 1024 * 1024;
 const MAX_SSE_HISTORY_EVENTS = 256;
 const MAX_SSE_CLIENT_BUFFER_BYTES = 1024 * 1024;
 const MAX_SSE_CLIENTS_PER_SESSION = 3;
-const MAX_LIVE_INSTANCES = 8;
+const DEFAULT_MAX_INSTANCES = 1;
 const API_WINDOW_MS = 60_000;
 const API_MAX_REQUESTS = 120;
 const ALLOWED_IMAGE_TYPES: ReadonlySet<string> = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"]);
@@ -91,6 +91,7 @@ export interface PocketServerOptions {
 	bodyLimitBytes?: number;
 	controllerLeaseMs?: number;
 	apiRateLimit?: ApiRateLimit;
+	maxInstances?: number;
 	instanceController?: InstanceController;
 }
 
@@ -625,9 +626,10 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 		throw new Error(`Public directory is not a directory: ${publicDir}`);
 	}
 
+	const maxInstances = options.maxInstances ?? DEFAULT_MAX_INSTANCES;
 	const secureCookie = !localInsecure;
 	const auth = new AuthManager(secureCookie);
-	const controller = options.instanceController ?? new InstanceManager(workspaceRoot);
+	const controller = options.instanceController ?? new InstanceManager(workspaceRoot, maxInstances);
 	const leases = new ControllerLeases(options.controllerLeaseMs);
 	const streamHub = new StreamHub(controller, leases, (owner) => auth.isSessionActive(owner));
 	const bodyLimit = options.bodyLimitBytes ?? DEFAULT_BODY_LIMIT;
@@ -702,16 +704,20 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 				}
 
 				if (pathname === "/api/bootstrap" && method === "GET") {
+					const instances = controller.list();
+					const liveCount = instances.filter((i) => i.status !== "stopped").length;
 					sendJson(response, 200, {
 						authenticated: true,
 						csrfToken: session.csrfToken,
-						instances: controller.list(),
+						instances,
 						workspaceRoot,
 						workspaceName: basename(workspaceRoot),
 						fullHostAccess: true,
 						projectTrustOverride: false,
 						providerCredentials: "host",
 						controllerLeaseSeconds: Math.round((options.controllerLeaseMs ?? 45_000) / 1_000),
+						maxInstances,
+						liveInstanceCount: liveCount,
 					});
 					return;
 				}
@@ -725,8 +731,8 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 						throw new HttpError("Client-selected cwd is not allowed", 400, "fixed_workspace_required");
 					}
 					const liveCount = controller.list().filter((i) => i.status !== "stopped").length;
-					if (liveCount >= MAX_LIVE_INSTANCES) {
-						throw new HttpError(`Too many live instances (max ${MAX_LIVE_INSTANCES})`, 429, "too_many_instances");
+					if (liveCount >= maxInstances) {
+						throw new HttpError(`Instance capacity full (${maxInstances} max)`, 429, "capacity_exceeded");
 					}
 					const label = optionalString(body.label, "label", 128);
 					const instance = await controller.spawn(label);

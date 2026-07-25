@@ -63,6 +63,8 @@ const state = {
 	extensionTimer: null,
 	instances: [],
 	isStreaming: false,
+	liveInstanceCount: 0,
+	maxInstances: 0,
 	mode: "prompt",
 	model: null,
 	models: [],
@@ -197,6 +199,8 @@ async function bootstrap() {
 		state.csrfToken = data.csrfToken;
 		state.instances = data.instances || [];
 		state.workspace = data.workspaceRoot || "";
+		state.maxInstances = data.maxInstances || 0;
+		state.liveInstanceCount = data.liveInstanceCount || 0;
 		elements.spawnWorkspace.textContent = state.workspace;
 		elements.spawnWorkspace.title = state.workspace;
 		showApplication();
@@ -234,8 +238,21 @@ function instanceName(instance) {
 	return instance.label?.trim() || `Agent ${instance.id.slice(0, 6)}`;
 }
 
+function updateCapacityDisplay() {
+	const capacityInfo = byId("capacity-info");
+	const spawnSubmit = byId("spawn-submit");
+	const capacityText = byId("capacity-text");
+	const isFull = state.maxInstances > 0 && state.liveInstanceCount >= state.maxInstances;
+	capacityInfo.hidden = !isFull;
+	spawnSubmit.disabled = isFull;
+	if (isFull) {
+		capacityText.textContent = `All ${state.maxInstances} instance slot${state.maxInstances === 1 ? "" : "s"} are in use. Stop an existing agent to free capacity.`;
+	}
+}
+
 function renderInstances() {
 	elements.instanceList.replaceChildren();
+	updateCapacityDisplay();
 	if (!state.instances.length) {
 		const empty = document.createElement("p");
 		empty.className = "empty-list";
@@ -306,13 +323,19 @@ async function spawnInstance(event) {
 		});
 		state.instances = state.instances.filter((item) => item.id !== data.instance.id);
 		state.instances.push(data.instance);
+		state.liveInstanceCount = state.instances.filter((i) => i.status !== "stopped").length;
 		elements.spawnLabel.value = "";
 		renderInstances();
 		await activateInstance(data.instance.id);
 		closeSheets();
 		announce(`${instanceName(data.instance)} started.`);
 	} catch (error) {
-		toast(error.message, "error");
+		if (error.code === "capacity_exceeded") {
+			toast(`Instance capacity full (${state.maxInstances} max). Stop an existing agent first.`, "warning", 6000);
+			renderInstances();
+		} else {
+			toast(error.message, "error");
+		}
 	} finally {
 		submit.disabled = false;
 	}
@@ -329,6 +352,7 @@ async function stopInstance(instanceId) {
 			body: {},
 		});
 		state.instances = state.instances.map((item) => (item.id === instanceId ? data.instance : item));
+		state.liveInstanceCount = state.instances.filter((i) => i.status !== "stopped").length;
 		if (state.activeId === instanceId) {
 			state.eventSource?.close();
 			state.eventSource = null;
@@ -818,6 +842,7 @@ function handleEvent(event) {
 		state.instances = state.instances.map((item) =>
 			item.id === event.instanceId ? { ...item, status: event.status } : item,
 		);
+		state.liveInstanceCount = state.instances.filter((i) => i.status !== "stopped").length;
 		renderInstances();
 		if (event.instanceId === state.activeId) {
 			setConnection(event.status === "online" ? "online" : "error", event.status);

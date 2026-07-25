@@ -13,6 +13,10 @@ to its host process. Treat access to this app like shell access to the host.
 - Every Pi instance starts in the configured workspace; the phone cannot
   choose a different startup directory.
 - Only one browser controller can own an instance at a time.
+- The number of live Pi instances is capped at 1 by default. The cap is
+  configurable via `--max-instances` / `PI_POCKET_MAX_INSTANCES` and enforced
+  atomically at the instance-manager level. The UI shows a capacity warning
+  when the limit is reached.
 - Request bodies and labels are size limited.
 - Static assets use a strict Content Security Policy and no third-party code.
 - The service worker caches only the public app shell. It never caches API

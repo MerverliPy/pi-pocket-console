@@ -243,6 +243,10 @@
 				</button>
 			</header>
 			<div id="instance-list" class="instance-list"></div>
+			<div id="capacity-info" class="capacity-info" hidden>
+				<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+				<span id="capacity-text">All instances are in use. Stop an existing agent to free capacity.</span>
+			</div>
 			<form id="spawn-form" class="spawn-form">
 				<div class="fixed-workspace">
 					<span>Host workspace</span>
@@ -251,7 +255,7 @@
 				<label for="spawn-cwd">Agent label <span class="optional-label">(optional)</span></label>
 				<div>
 					<input id="spawn-cwd" type="text" value="" placeholder="iPhone session" autocomplete="off" maxlength="128" />
-					<button type="submit">Start</button>
+					<button id="spawn-submit" type="submit">Start</button>
 				</div>
 				<p>The host workspace is fixed; this mobile controller cannot change it.</p>
 			</form>

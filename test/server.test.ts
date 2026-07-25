@@ -652,7 +652,7 @@ describe("SSE connection limits", () => {
 
 describe("instance spawn limits", () => {
 	test("rejects spawning more than the maximum live instances", async () => {
-		const { server } = await createFixture();
+		const { server } = await createFixture(undefined, { maxInstances: 8 });
 		const auth = await pair(server);
 		const ids: string[] = [];
 
@@ -689,10 +689,204 @@ describe("instance spawn limits", () => {
 	});
 });
 
+describe("configurable instance capacity", () => {
+	test("default max is 1 and bootstrap exposes capacity state", async () => {
+		const { server } = await createFixture();
+		const auth = await pair(server);
+
+		const bootstrap = await request(server, {
+			path: "/api/bootstrap",
+			cookie: auth.cookie,
+		});
+		assert.equal(bootstrap.status, 200);
+		assert.equal(bootstrap.json.maxInstances, 1);
+		assert.equal(bootstrap.json.liveInstanceCount, 0);
+
+		const first = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			body: {},
+		});
+		assert.equal(first.status, 201);
+
+		const second = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			body: {},
+		});
+		assert.equal(second.status, 429);
+		assert.equal(second.json.code, "capacity_exceeded");
+
+		const afterBootstrap = await request(server, {
+			path: "/api/bootstrap",
+			cookie: auth.cookie,
+		});
+		assert.equal(afterBootstrap.json.liveInstanceCount, 1);
+	});
+
+	test("supports a custom maxInstances configuration", async () => {
+		const { server } = await createFixture(undefined, { maxInstances: 3 });
+		const auth = await pair(server);
+		const ids: string[] = [];
+
+		for (let attempt = 0; attempt < 4; attempt += 1) {
+			const result = await request(server, {
+				path: "/api/instances",
+				method: "POST",
+				origin: server.origin,
+				cookie: auth.cookie,
+				csrf: auth.csrf,
+				body: { label: `test-${attempt}` },
+			});
+			if (attempt < 3) {
+				assert.equal(result.status, 201);
+				ids.push((result.json.instance as InstanceSummary).id);
+			} else {
+				assert.equal(result.status, 429);
+				assert.equal(result.json.code, "capacity_exceeded");
+			}
+		}
+		assert.equal(ids.length, 3);
+
+		await Promise.all(
+			ids.map((id) =>
+				request(server, {
+					path: `/api/instances/${id}/stop`,
+					method: "POST",
+					origin: server.origin,
+					cookie: auth.cookie,
+					csrf: auth.csrf,
+					body: {},
+				}),
+			),
+		);
+	});
+
+	test("stopping an instance frees a slot", async () => {
+		const { server } = await createFixture();
+		const auth = await pair(server);
+
+		const first = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			body: { label: "only" },
+		});
+		assert.equal(first.status, 201);
+		const instance = first.json.instance as InstanceSummary;
+
+		const blocked = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			body: {},
+		});
+		assert.equal(blocked.status, 429);
+
+		const stopped = await request(server, {
+			path: `/api/instances/${instance.id}/stop`,
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			body: {},
+		});
+		assert.equal(stopped.status, 200);
+
+		const retry = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			body: {},
+		});
+		assert.equal(retry.status, 201);
+	});
+
+	test("concurrent create requests respect the cap", async () => {
+		const { server } = await createFixture(undefined, { maxInstances: 2 });
+		const auth = await pair(server);
+
+		const results = await Promise.all(
+			Array.from({ length: 5 }, (_, i) =>
+				request(server, {
+					path: "/api/instances",
+					method: "POST",
+					origin: server.origin,
+					cookie: auth.cookie,
+					csrf: auth.csrf,
+					body: { label: `concurrent-${i}` },
+				}),
+			),
+		);
+
+		const created = results.filter((r) => r.status === 201);
+		const rejected = results.filter((r) => r.status === 429);
+		assert.equal(created.length, 2);
+		assert.equal(rejected.length, 3);
+		for (const r of rejected) {
+			assert.equal(r.json.code, "capacity_exceeded");
+		}
+
+		await Promise.all(
+			created.map((r) => {
+				const inst = r.json.instance as InstanceSummary;
+				return request(server, {
+					path: `/api/instances/${inst.id}/stop`,
+					method: "POST",
+					origin: server.origin,
+					cookie: auth.cookie,
+					csrf: auth.csrf,
+					body: {},
+				});
+			}),
+		);
+	});
+
+	test("returns a stable capacity_exceeded error shape", async () => {
+		const { server } = await createFixture();
+		const auth = await pair(server);
+
+		await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			body: {},
+		});
+
+		const overflow = await request(server, {
+			path: "/api/instances",
+			method: "POST",
+			origin: server.origin,
+			cookie: auth.cookie,
+			csrf: auth.csrf,
+			body: {},
+		});
+		assert.equal(overflow.status, 429);
+		assert.equal(overflow.json.code, "capacity_exceeded");
+		assert.equal(typeof overflow.json.error, "string");
+		assert.match(String(overflow.json.error), /capacity/i);
+	});
+});
+
 describe("API rate limiting", () => {
 	test("rejects requests exceeding the configured per-session POST limit", async () => {
 		const { server } = await createFixture(undefined, {
 			apiRateLimit: { windowMs: 10_000, maxRequests: 3 },
+			maxInstances: 4,
 		});
 		const auth = await pair(server);
 

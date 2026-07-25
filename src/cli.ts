@@ -12,6 +12,7 @@ interface CliOptions {
 	localInsecure: boolean;
 	tlsCertPath?: string;
 	tlsKeyPath?: string;
+	maxInstances?: number;
 }
 
 const require = createRequire(import.meta.url);
@@ -37,13 +38,15 @@ Local preview mode:
 Options:
   --host <host>            Listener address. Default: 127.0.0.1
   --port <port>            Listener port. Default: 31415
+  --max-instances <n>      Maximum concurrent live Pi instances. Default: 1
   --tls-cert <path>        PEM certificate for native HTTPS.
   --tls-key <path>         PEM private key for native HTTPS.
   -h, --help               Show this help.
   -v, --version            Print the version.
 
 Environment equivalents:
-  PI_POCKET_WORKSPACE, PI_POCKET_ORIGIN, PI_POCKET_HOST, PI_POCKET_PORT
+  PI_POCKET_WORKSPACE, PI_POCKET_ORIGIN, PI_POCKET_HOST, PI_POCKET_PORT,
+  PI_POCKET_MAX_INSTANCES
 
 Recommended private remote path:
   1. Start Pi Pocket with --origin set to the Tailscale Serve HTTPS URL.
@@ -70,11 +73,22 @@ function parsePort(value: string): number {
 	return port;
 }
 
+function parseUnsignedInt(value: string, name: string): number {
+	const n = Number(value);
+	if (!Number.isInteger(n) || n < 1 || n > 256) {
+		throw new Error(`${name} must be an integer between 1 and 256: ${value}`);
+	}
+	return n;
+}
+
 function parseArgs(args: string[]): CliOptions | "help" | "version" {
 	let workspaceRoot = env.PI_POCKET_WORKSPACE;
 	let host = env.PI_POCKET_HOST;
 	let port = env.PI_POCKET_PORT ? parsePort(env.PI_POCKET_PORT) : undefined;
 	let publicOrigin = env.PI_POCKET_ORIGIN;
+	let maxInstances = env.PI_POCKET_MAX_INSTANCES
+		? parseUnsignedInt(env.PI_POCKET_MAX_INSTANCES, "PI_POCKET_MAX_INSTANCES")
+		: undefined;
 	let localInsecure = false;
 	let tlsCertPath: string | undefined;
 	let tlsKeyPath: string | undefined;
@@ -106,6 +120,10 @@ function parseArgs(args: string[]): CliOptions | "help" | "version" {
 				break;
 			case "--local-insecure":
 				localInsecure = true;
+				break;
+			case "--max-instances":
+				maxInstances = parseUnsignedInt(valueAfter(args, index, argument), "--max-instances");
+				index += 1;
 				break;
 			case "--tls-cert":
 				tlsCertPath = valueAfter(args, index, argument);
@@ -144,6 +162,7 @@ function parseArgs(args: string[]): CliOptions | "help" | "version" {
 		localInsecure,
 		tlsCertPath,
 		tlsKeyPath,
+		maxInstances,
 	};
 }
 
@@ -202,6 +221,7 @@ async function run(): Promise<void> {
 		publicOrigin: parsed.publicOrigin,
 		localInsecure: parsed.localInsecure,
 		tls: await loadTls(parsed),
+		maxInstances: parsed.maxInstances,
 	});
 	printStartup(server, parsed.localInsecure, parsed.tlsCertPath !== undefined);
 

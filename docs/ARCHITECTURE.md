@@ -44,6 +44,8 @@ The HTTP layer adds controls that Pi RPC itself does not provide:
 - a single-controller lease;
 - workspace-root enforcement;
 - request and rate limits;
+- a configurable live-instance capacity cap (default 1), enforced atomically in
+  the instance manager and exposed through the bootstrap response;
 - PWA asset delivery and security headers.
 
 ## Deliberate non-goals for v0.1

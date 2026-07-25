@@ -45,7 +45,10 @@ function clone(record: InstanceSummary): InstanceSummary {
 export class InstanceManager implements InstanceController {
 	private readonly instances = new Map<string, LiveInstance>();
 
-	constructor(private readonly workspaceRoot: string) {}
+	constructor(
+		private readonly workspaceRoot: string,
+		private readonly maxInstances: number = 1,
+	) {}
 
 	private update(live: LiveInstance, updates: Partial<InstanceSummary>): void {
 		live.record = {
@@ -71,6 +74,16 @@ export class InstanceManager implements InstanceController {
 	}
 
 	async spawn(label?: string): Promise<InstanceSummary> {
+		let liveCount = 0;
+		for (const live of this.instances.values()) {
+			if (live.record.status !== "stopped") {
+				liveCount += 1;
+			}
+		}
+		if (liveCount >= this.maxInstances) {
+			throw new Error("capacity_exceeded");
+		}
+
 		const now = new Date().toISOString();
 		const live: LiveInstance = {
 			record: {
