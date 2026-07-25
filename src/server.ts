@@ -7,6 +7,7 @@ import { basename, dirname, extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { RpcCommand, RpcExtensionUIResponse } from "@earendil-works/pi-coding-agent";
 import { ApiRouter } from "./api-router.ts";
+import { AuditLogger } from "./audit.ts";
 import { AuthManager, PairingError } from "./auth.ts";
 import { ControllerLeases } from "./controller-lease.ts";
 import { type InstanceController, InstanceManager, type InstanceSummary } from "./instance-manager.ts";
@@ -630,6 +631,9 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 
 	const secureCookie = !localInsecure;
 	const auth = new AuthManager(secureCookie);
+	const audit = new AuditLogger();
+	await audit.init();
+	audit.info("GATEWAY_STARTING", "Pi Pocket Console gateway starting");
 	const controller = options.instanceController ?? new InstanceManager(workspaceRoot);
 	const leases = new ControllerLeases(options.controllerLeaseMs);
 	const streamHub = new StreamHub(controller, leases, (owner) => auth.isSessionActive(owner));
@@ -638,6 +642,7 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 	const apiRateBuckets = new Map<string, number[]>();
 	const apiRouter = new ApiRouter({
 		auth,
+		audit,
 		workspaceRoot,
 		workspaceName: basename(workspaceRoot),
 		secureCookie,
@@ -645,6 +650,17 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 		rateWindowMs: rateLimit.windowMs,
 		rateMaxRequests: rateLimit.maxRequests,
 	});
+
+	const { execSync } = await import("node:child_process");
+	try {
+		const pgrep = execSync("pgrep -f 'pi-pocket-console'", { encoding: "utf8", timeout: 3000 });
+		const pids = pgrep.trim().split("\n").filter(Boolean);
+		if (pids.length > 1) {
+			audit.warning("ORPHAN_DETECTED", `Found ${pids.length} pi-pocket-console processes running`);
+		}
+	} catch {
+		// pgrep not available or no other instances
+	}
 	let expectedOrigin = options.publicOrigin ? normalizeOrigin(options.publicOrigin) : "";
 	if (localInsecure && expectedOrigin && !expectedOrigin.startsWith("http://")) {
 		throw new Error("localInsecure requires an http:// publicOrigin");

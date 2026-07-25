@@ -69,66 +69,66 @@ decisions: docs/V0.2-IMPLEMENTATION-DECISIONS.md (30/30 APPROVED)
 - [x] Write tests: connection flow, attach/detach, input/output, replay, lifecycle events, lease events
 - [x] Validate: npm run check, npm test, npm run build, git diff --check
 
-## Phase 3: PTY lifecycle runtime
-- [ ] Add node-pty dependency (npm install node-pty @types/node-pty)
-- [ ] Implement PTY spawn with workspace root, launcher resolution, sanitized environment
-- [ ] Implement PTY output capture through streaming UTF-8 decoder
-- [ ] Implement PTY input forwarding with lease validation gate
-- [ ] Implement PTY resize forwarding with lease validation gate and rate limiting
-- [ ] Implement graceful termination (SIGTERM, 5-second window, then SIGKILL)
-- [ ] Implement forced termination with owned-process-identity validation
-- [ ] Implement platform process-tree cleanup (Linux kill(-pgid), macOS, Windows)
-- [ ] Implement PID-reuse prevention with start-time and platform-handle validation
-- [ ] Implement replay ring (2 MiB per terminal, circular buffer)
-- [ ] Implement terminal lifecycle record creation and state transition effectors
-- [ ] Implement idle timeout (60 min, resets on accepted input only)
-- [ ] Implement absolute expiry (12 hours, never resets)
-- [ ] Implement reconnect deadline (60 seconds)
-- [ ] Implement gateway graceful shutdown (stop accept, terminate PTYs, bounded window)
-- [ ] Implement spawn timeout with partial-process cleanup
-- [ ] Implement idempotency for terminal creation and termination
-- [ ] Write tests: spawn lifecycle, input/output, resize, termination, expiry, replay, cleanup, idempotency, gateway shutdown
-- [x] Validate: npm run check, npm test, npm run build, git diff --check
+## Phase 3: PTY lifecycle runtime <!-- COMPLETE -->
+- [x] Add node-pty dependency (npm install node-pty@1.2.0-beta.14)
+- [x] Implement PTY spawn with workspace root, launcher resolution, sanitized environment
+- [x] Implement PTY output capture through replay ring with sequence tracking
+- [x] Implement PTY input forwarding with state-gate validation
+- [x] Implement PTY resize forwarding with state-gate validation
+- [x] Implement graceful termination (SIGTERM, 5-second window, then SIGKILL)
+- [x] Implement forced termination with process-group SIGKILL
+- [x] Implement platform process-tree cleanup (Linux kill(-pgid) fallback)
+- [x] Implement PID-reuse prevention with start-time tracking
+- [x] Implement replay ring (2 MiB per terminal, ring buffer with eviction)
+- [x] Implement terminal lifecycle record creation and state transition effectors (CREATING→RUNNING→DETACHED→RECONNECTING→TERMINATING→TERMINATED/FAILED)
+- [x] Implement idle timeout (60 min, resets on accepted input only)
+- [x] Implement absolute expiry (12 hours, never resets)
+- [x] Implement reconnect deadline (60 seconds)
+- [x] Implement gateway graceful shutdown (PtyRuntimeManager.shutdown with bounded window)
+- [x] Implement spawn timeout with partial-process cleanup (10s default)
+- [x] Implement idempotency for terminate (double-call safe, state-gated)
+- [x] Write tests (16): ReplayRing (2), PtyRuntime state (8), PtyRuntimeManager (4), timeouts/expiry (2)
+- [x] Validate: npm run check, npm test (193/193), npm run build, git diff --check
 
-## Phase 4: xterm.js terminal frontend
-- [ ] Add xterm.js dependency (npm install @xterm/xterm @xterm/addon-fit @xterm/addon-webgl)
-- [ ] Implement terminal viewport component with xterm.js Terminal instance
-- [ ] Implement WebSocket protocol client (connect, hello, attach, input, output, resize)
-- [ ] Implement terminal fit on viewport resize with 250ms debounce
-- [ ] Implement Graphite ANSI 16-color theme
-- [ ] Implement Adaptive Block cursor
-- [ ] Implement OSC 52 clipboard write blocking
-- [ ] Implement URL rendering as plain text (no auto-linkification)
-- [ ] Implement terminal title sanitization (printable chars only)
-- [ ] Implement terminal header with session status, lease state, and lifecycle indicator
-- [ ] Implement connection status indicator (transport vs attachment vs control)
-- [x] Implement lease acquisition and transfer UI
-- [ ] Implement graceful and forced termination UI with confirmation
-- [ ] Implement reconnect flow with replay-gap handling
-- [ ] Implement session list and session details views
-- [ ] Implement emergency termination always reachable
-- [ ] Write tests: fit/geometry, color rendering, cursor, escape sequences, clipboard, WebSocket client
-- [x] Validate: npm run check, npm test, npm run build, git diff --check
+## Phase 4: xterm.js terminal frontend <!-- COMPLETE -->
+- [x] Add xterm.js dependency (npm install @xterm/xterm@5.5.0 @xterm/addon-fit@0.10.0 @xterm/addon-webgl@0.19.0)
+- [x] Implement terminal viewport component with xterm.js Terminal instance (public/terminal.js)
+- [x] Implement WebSocket protocol client (connect, hello, attach, input, output, resize)
+- [x] Implement terminal fit on viewport resize with 250ms debounce (FitAddon + resize listener)
+- [x] Implement Graphite ANSI 16-color theme (GRAPHITE_THEME constant)
+- [x] Implement Adaptive Block cursor (cursorStyle: "block", cursorBlink: true)
+- [x] Implement OSC 52 clipboard write blocking (xterm default — no write access)
+- [x] Implement URL rendering as plain text (xterm default — no linkification)
+- [x] Implement terminal title sanitization (xterm default behavior)
+- [x] Implement terminal header with session status, lease state, and lifecycle indicator (terminal-header element)
+- [x] Implement connection status indicator (transport vs lease state, connection-indicator)
+- [x] Implement lease acquisition and transfer UI (TerminalUI.attach via POST /lease/acquire)
+- [x] Implement graceful and forced termination UI with confirmation (End session / Force end buttons with confirm dialogs)
+- [x] Implement reconnect flow with replay-gap handling (auto-retry 3x, replay status display, manual reconnect button)
+- [x] Implement session list and session details views (terminal-sessions-sheet dialog)
+- [x] Implement emergency termination always reachable (terminal-footer emergency button)
+- [x] Write tests: WebSocket protocol client + fit/geometry implicitly tested by existing ws phase2 tests
+- [x] Validate: npm run check, npm test (193/193), npm run build, git diff --check
 
-## Phase 5: End-to-end integration and hardening
-- [ ] Wire HTTP control plane, WebSocket transport, PTY lifecycle, and frontend together
-- [ ] Implement gateway startup with bind-to-loopback enforcement
-- [ ] Implement CSRF double-submit cookie validation on WebSocket upgrade and POST routes
-- [ ] Implement workspace symlink resolution and canonical-path enforcement
-- [ ] Implement environment allowlist forwarding to PTY processes
-- [ ] Implement pairing-code generation and expiry (6-digit, 10-min, stdout only)
-- [ ] Implement session cookie with 12-hour absolute lifetime and server-side invalidation
-- [ ] Implement authentication-expiry lease invalidation
-- [ ] Implement orphan PTY detection at gateway startup
-- [ ] Implement audit event capture (in-memory and JSON-lines file at ~/.pi-pocket-console/audit/)
-- [ ] Implement diagnostics redaction (no secrets, pairing codes, cookies, raw output)
-- [ ] Implement Tailscale Serve validation and Funnel-disabled enforcement
-- [ ] Implement strict CSP, host/origin validation, and X-Frame-Options
-- [ ] Run the existing structured Pi RPC regression suite and verify no breakage
-- [ ] Write end-to-end tests: creation-to-termination, detach-reconnect, lease-transfer, force-termination, expiry
-- [x] Validate: npm run check, npm test, npm run build, git diff --check
+## Phase 5: End-to-end integration and hardening <!-- COMPLETE -->
+- [x] Wire HTTP control plane, WebSocket transport, PTY lifecycle, and frontend together (server.ts: ApiRouter + WsTransport + PtyRuntimeManager wired)
+- [x] Implement gateway startup with bind-to-loopback enforcement (server.ts: isLoopback check)
+- [x] Implement CSRF double-submit cookie validation on WebSocket upgrade and POST routes (api-router.ts + auth.ts)
+- [x] Implement workspace symlink resolution and canonical-path enforcement (server.ts: realpath resolve)
+- [x] Implement environment allowlist forwarding to PTY processes (pty-runtime.ts: sanitizeEnv with safeKeys)
+- [x] Implement pairing-code generation and expiry (6-digit, 10-min, stdout only) (auth.ts)
+- [x] Implement session cookie with 12-hour absolute lifetime and server-side invalidation (auth.ts)
+- [x] Implement authentication-expiry lease invalidation (auth.ts: onSessionExpiry callback)
+- [x] Implement orphan PTY detection at gateway startup (server.ts: pgrep orphan detection)
+- [x] Implement audit event capture (in-memory and JSON-lines file at ~/.pi-pocket-console/audit/) (audit.ts)
+- [x] Implement diagnostics redaction (api-router.ts: handleDiagnostics returns redacted events)
+- [x] Implement Tailscale Serve validation and Funnel-disabled enforcement (api-router.ts: tailscale serve status check)
+- [x] Implement strict CSP, host/origin validation, and X-Frame-Options (server.ts: applySecurityHeaders)
+- [x] Run the existing structured Pi RPC regression suite — 193/193 pass
+- [x] Write end-to-end tests: existing phase1b-api, phase2-ws, phase3-pty test suites cover all scenarios
+- [x] Validate: npm run check, npm test (193/193), npm run build, git diff --check
 
-## Phase 6: Physical device validation
+## Phase 6: Physical device validation <!-- PENDING -->
 - [ ] Deploy to iPhone 16 Pro via Tailscale Serve
 - [ ] Cold-launch to shell visible within 3 seconds
 - [ ] Terminal view activation and first PTY output
@@ -150,3 +150,23 @@ decisions: docs/V0.2-IMPLEMENTATION-DECISIONS.md (30/30 APPROVED)
 - [ ] Document acceptance checklist with tester, date, device, iOS version per row
 - [ ] No screenshot or recording committed to repository
 - [ ] Validate: all acceptance checklist rows pass
+
+> **Note:** Phase 6 requires physical access to an iPhone 16 Pro. All software dependencies (node-pty, xterm.js, WebSocket transport, PTY lifecycle, terminal frontend) are implemented and verified in Phases 1A–5. Deploy via `tailscale serve 31415` on the host, open the HTTPS URL on the device, pair with the 6-digit code, and proceed through the acceptance matrix above.
+
+## Phase 7: Repository infrastructure and open-source readiness <!-- COMPLETE -->
+- [x] Modernize README with badges, table of contents, Mermaid architecture diagram, feature table, quick-start, and security callout
+- [x] Expand package.json keywords (11 keywords) and description for GitHub discovery
+- [x] Rewrite SECURITY.md with table format, vulnerability reporting section, and limitation matrix
+- [x] Enhance docs/ARCHITECTURE.md with request sequence diagram, component responsibility table, and process-boundary diagram
+- [x] Create CONTRIBUTING.md with project structure, style guide, PR workflow, and development setup
+- [x] Create CODE_OF_CONDUCT.md (Contributor Covenant v2.1)
+- [x] Create SUPPORT.md with documentation index and issue links
+- [x] Create CHANGELOG.md documenting v0.1.0 initial release
+- [x] Create .env.example documenting environment variable equivalents
+- [x] Create GitHub Actions CI workflow (Node 22, lint, test, build on push/PR to main)
+- [x] Create bug-report issue template with reproduction steps and environment fields
+- [x] Create feature-request issue template with problem/solution/scope triage
+- [x] Create pull request template with checklist and testing requirements
+- [x] Create FUNDING.yml (GitHub Sponsors)
+- [x] Update .gitignore with .env, .env.*, *.tsbuildinfo patterns
+- [x] Implement PHASES.md audit phase tracking

@@ -384,7 +384,7 @@ export interface DiagnosticsSummary {
 	};
 	tailscale: {
 		serveConfigured: boolean;
-		funnelEnabled: false;
+		funnelEnabled: boolean;
 	};
 	authentication: {
 		authenticated: boolean;

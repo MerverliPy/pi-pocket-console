@@ -58,6 +58,7 @@ export class AuthManager {
 	private readonly pairingExpiresAt: number;
 	private readonly sessions = new Map<string, Session>();
 	private readonly attempts = new Map<string, AttemptWindow>();
+	private readonly expiryCallbacks = new Set<(sessionId: string) => void>();
 
 	constructor(
 		private readonly secureCookie: boolean,
@@ -68,6 +69,11 @@ export class AuthManager {
 		this.pairingCode = randomInt(0, 1_000_000).toString().padStart(6, "0");
 		this.activePairingCode = this.pairingCode;
 		this.pairingExpiresAt = this.now() + this.pairingWindowMs;
+	}
+
+	onSessionExpiry(callback: (sessionId: string) => void): () => void {
+		this.expiryCallbacks.add(callback);
+		return () => this.expiryCallbacks.delete(callback);
 	}
 
 	pair(code: string, address: string): Session {
@@ -110,9 +116,16 @@ export class AuthManager {
 		}
 		if (session.expiresAt <= this.now()) {
 			this.sessions.delete(token);
+			for (const cb of this.expiryCallbacks) {
+				cb(session.id);
+			}
 			return undefined;
 		}
 		return session;
+	}
+
+	getSession(token: string): Session | undefined {
+		return this.sessions.get(token);
 	}
 
 	verifyCsrf(session: Session, token: string | undefined): boolean {

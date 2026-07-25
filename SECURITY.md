@@ -1,62 +1,59 @@
-# Security model
+# Security Model
 
-Pi Pocket Console is a remote control surface for a process that can read and
-modify files, run commands, use network access, and read credentials available
-to its host process. Treat access to this app like shell access to the host.
+> **Treat access to Pi Pocket Console like shell access to the host.**
+
+Pi Pocket Console is a remote control surface for a process that can read and modify files, run commands, use network access, and read credentials available to its host process.
 
 ## Defaults
 
-- The HTTP server listens on loopback only.
-- A six-digit pairing code is generated at startup and rate limited.
-- Successful pairing creates a random, HttpOnly, SameSite session cookie.
-- Mutation requests require a same-origin request and a per-session CSRF token.
-- Every Pi instance starts in the configured workspace; the phone cannot
-  choose a different startup directory.
-- Only one browser controller can own an instance at a time.
-- Request bodies and labels are size limited.
-- Static assets use a strict Content Security Policy and no third-party code.
-- The service worker caches only the public app shell. It never caches API
-  responses, transcripts, tool output, provider credentials, or pairing data.
+| Layer | Protection |
+|---|---|
+| **Network** | HTTP server listens on loopback only (`127.0.0.1`) |
+| **Pairing** | Six-digit code, generated at startup, rate-limited (5 attempts per 10-minute window) |
+| **Session** | Random, HttpOnly, SameSite=Strict cookie; 12-hour TTL |
+| **CSRF** | Per-session token required for mutation requests |
+| **Workspace** | Fixed at startup; phone cannot change it |
+| **Controller** | Single renewable lease prevents two devices from driving one instance |
+| **Request limits** | Body size capped at 3 MB; labels capped at 128 bytes |
+| **Content Security** | Strict CSP, no third-party code, `frame-ancestors 'none'` |
+| **Cache** | Service worker caches only the public app shell — never API responses, transcripts, tool output, or credentials |
 
-## Remote access
+## Remote Access
 
-Keep the listener on `127.0.0.1` and place a private HTTPS proxy in front of it.
-Tailscale Serve is the recommended initial deployment because it keeps the app
-inside the tailnet and terminates HTTPS. Do not use Tailscale Funnel or expose
-the listener directly to the public internet.
+Keep the listener on `127.0.0.1` and place a private HTTPS proxy in front of it. [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve) is the recommended deployment:
 
-Pairing protects the application even inside the private network. Restart the
-gateway to invalidate in-memory device sessions and generate a new pairing
-code.
+```
+tailscale serve 31415
+```
 
-## Pi privileges
+This keeps the app inside your tailnet and terminates HTTPS. **Do not use Tailscale Funnel** or expose the listener directly to the public internet.
 
-Pi has no built-in filesystem, process, network, or credential permission
-system. The fixed startup workspace is not a filesystem sandbox: Pi and its
-shell commands can still access anything available to the host account. Pi
-Pocket Console therefore reports `Full host access` unless a real container or
-sandbox surrounds the gateway process. UI confirmations are not a host
-security boundary.
+Restart the gateway to invalidate all in-memory sessions and generate a new pairing code.
 
-For stronger isolation, run the gateway and Pi inside one of Pi's documented
-container or sandbox patterns with only the repository and credentials needed
-for the task.
+## Pi Privileges
 
-## Project trust
+Pi has no built-in permission system. The fixed startup workspace is **not a filesystem sandbox** — Pi and its shell commands can access anything available to the host account. Pi Pocket Console reports `Full host access` unless a real container or sandbox surrounds the gateway process.
 
-Pi Pocket Console never silently adds Pi's `--approve` option. Project-local
-extensions, skills, prompts, themes, and context files follow the trust
-decision already saved by Pi on the host. Review and establish that decision
-locally before relying on project resources from mobile.
+UI confirmations are not a host security boundary.
 
-## Current limitations
+For stronger isolation, run the gateway and Pi inside one of Pi's documented container or sandbox patterns.
 
-- Pairing uses a one-time code, not a passkey.
-- Device sessions are in memory and are revoked by restarting the gateway.
-- The Shell surface uses Pi RPC `bash`; it is not an interactive PTY.
-- Browser background suspension can interrupt the live event stream. The PWA
-  reconnects and rehydrates Pi state when it returns to the foreground.
-- A stopped gateway cannot wake a sleeping host.
+## Project Trust
 
-These limitations are shown in the UI and must not be represented as completed
-security features.
+Pi Pocket Console never silently adds Pi's `--approve` option. Project-local extensions, skills, prompts, themes, and context files follow the trust decision saved by Pi on the host.
+
+## Current Limitations
+
+| Limitation | Impact |
+|---|---|
+| Pairing uses a one-time code, not a passkey | Weaker than FIDO2/WebAuthn |
+| Device sessions are in-memory only | Restarting the gateway revokes all sessions |
+| Shell is Pi RPC `bash` — not an interactive PTY | Cannot run `vim`, `tmux`, or other TUI apps |
+| iOS background suspension may interrupt SSE | PWA reconnects and reconciles state on foreground |
+| Stopped gateway cannot wake a sleeping host | No wake-on-LAN or push notification support |
+
+These limitations are shown in the UI and must not be represented as completed security features.
+
+## Security Vulnerability Reporting
+
+Report security vulnerabilities by opening a [GitHub issue](https://github.com/calvinbrady/pi-pocket-console/issues/new) with the `security` label. Describe the vulnerability, how to reproduce it, and your suggested fix.

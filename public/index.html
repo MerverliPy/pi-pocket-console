@@ -18,6 +18,7 @@
 		<link rel="icon" href="/icon.svg" type="image/svg+xml" />
 		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 		<link rel="stylesheet" href="/app.css" />
+		<link rel="stylesheet" href="/xterm.css" />
 		<title>Pi Pocket Console</title>
 	</head>
 	<body>
@@ -152,6 +153,26 @@
 				<div id="extension-widget-below" class="extension-widget" hidden></div>
 			</section>
 
+			<section id="terminal-panel" class="terminal-panel" hidden aria-label="Terminal session">
+				<header id="terminal-header" class="terminal-header">
+					<div class="terminal-state-row">
+						<span class="terminal-state-label">State:</span>
+						<span class="terminal-state-value state-creating">Starting</span>
+						<span id="terminal-connection-indicator" class="connection-indicator transport-disconnected">No connection</span>
+					</div>
+					<div id="terminal-actions" class="terminal-actions" style="display:none">
+						<button id="terminal-terminate-graceful" class="secondary-button" type="button">End session</button>
+						<button id="terminal-terminate-force" class="secondary-button danger" type="button">Force end</button>
+					</div>
+					<div id="terminal-replay-status" class="terminal-replay-status" hidden></div>
+				</header>
+				<div id="terminal-viewport" class="terminal-viewport"></div>
+				<div class="terminal-footer">
+					<button id="terminal-emergency-terminate" class="emergency-button" type="button">Emergency termination</button>
+					<button id="terminal-reconnect" class="secondary-button" type="button" hidden>Reconnect</button>
+				</div>
+			</section>
+
 			<section class="composer-dock" aria-label="Message composer">
 				<div id="mode-strip" class="mode-strip" role="tablist" aria-label="Send mode">
 					<button id="mode-prompt" type="button" role="tab" aria-selected="true" data-mode="prompt">Prompt</button>
@@ -233,6 +254,18 @@
 		</div>
 
 		<div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
+
+		<dialog id="terminal-sessions-sheet" class="sheet">
+			<div class="sheet-grabber" aria-hidden="true"></div>
+			<header class="sheet-header" aria-label="Terminal sessions sheet header">
+				<div><p class="eyebrow">PTY sessions</p><h2>Terminals</h2></div>
+				<button class="icon-button sheet-close" type="button" aria-label="Close">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+				</button>
+			</header>
+			<div id="terminal-session-list" class="terminal-session-list"></div>
+			<p class="sheet-footnote">Select a session to attach and acquire its controller lease.</p>
+		</dialog>
 
 		<dialog id="instance-sheet" class="sheet">
 			<div class="sheet-grabber" aria-hidden="true"></div>
@@ -349,6 +382,8 @@
 		</template>
 
 		<noscript>Pi Pocket Console requires JavaScript to connect to the host.</noscript>
+		<script src="/xterm.js"></script>
+		<script src="/terminal.js" defer></script>
 		<script src="/app.js" defer></script>
 	</body>
 </html>

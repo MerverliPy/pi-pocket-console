@@ -1,7 +1,9 @@
+import { execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AuthManager } from "./auth.ts";
 import { PairingError } from "./auth.ts";
+import type { AuditLogger } from "./audit.ts";
 import type {
 	AcquireLeaseResponse,
 	ApiFailure,
@@ -25,6 +27,7 @@ interface RateBucket {
 
 export interface RouterDeps {
 	auth: AuthManager;
+	audit: AuditLogger;
 	workspaceRoot: string;
 	workspaceName: string;
 	secureCookie: boolean;
@@ -308,6 +311,7 @@ export class ApiRouter {
 		const deviceLabel = requireString(body.deviceLabel, "device label");
 
 		const session = this.deps.auth.pair(code, address);
+		this.deps.audit.info("PAIRING_COMPLETE", `Device paired: ${deviceLabel}`);
 
 		response.setHeader("Set-Cookie", this.deps.auth.sessionCookie(session));
 		sendApiSuccess<PairingCompleteResponse>(
@@ -342,6 +346,7 @@ export class ApiRouter {
 		const session = this.deps.auth.authenticate(request.headers.cookie);
 		if (session) {
 			this.deps.auth.revoke(session);
+			this.deps.audit.info("SESSION_LOGOUT", `Session ${session.id} logged out`);
 		}
 		response.setHeader("Set-Cookie", this.deps.auth.clearCookie());
 		sendApiSuccess(response, requestId, { ok: true }, 200);
@@ -406,6 +411,7 @@ export class ApiRouter {
 			websocketPath: "/api/v1/ws",
 		};
 
+		this.deps.audit.info("TERMINAL_CREATED", `Terminal ${result.session.sessionId} created with launcher ${launcherId}`);
 		this.setIdempotent(clientRequestId, result);
 		sendApiSuccess(response, requestId, result, 201);
 		return true;
@@ -438,6 +444,7 @@ export class ApiRouter {
 			return true;
 		}
 
+		this.deps.audit.info("TERMINAL_TERMINATE_REQUESTED", `Terminal termination requested (mode: ${mode})`);
 		const result: TerminateTerminalResponse = { accepted: true, state: "TERMINATING" };
 		this.setIdempotent(clientRequestId, result);
 		sendApiSuccess(response, requestId, result);
@@ -547,14 +554,34 @@ export class ApiRouter {
 
 	private handleDiagnostics(request: IncomingMessage, response: ServerResponse, requestId: string): true {
 		const session = this.deps.auth.authenticate(request.headers.cookie);
+		let tailscaleServe = false;
+		let tailscaleFunnel = false;
+		try {
+			const out = execSync("tailscale serve status 2>/dev/null || true", {
+				encoding: "utf8",
+				timeout: 3000,
+			});
+			tailscaleServe = out.includes("https://");
+			tailscaleFunnel = out.toLowerCase().includes("funnel");
+		} catch {
+			// tailscale not installed
+		}
+		const recentEvents = this.deps.audit.getRecent(20).map((e) => ({
+			eventId: e.eventId,
+			timestamp: e.timestamp,
+			severity: e.severity,
+			code: e.code,
+			message: e.message,
+			safeNextAction: e.safeNextAction,
+		}));
 		const data: DiagnosticsSummary = {
 			gateway: {
 				status: "healthy",
 				boundAddress: "127.0.0.1",
 			},
 			tailscale: {
-				serveConfigured: false,
-				funnelEnabled: false,
+				serveConfigured: tailscaleServe,
+				funnelEnabled: tailscaleFunnel,
 			},
 			authentication: {
 				authenticated: session !== undefined,
@@ -564,7 +591,7 @@ export class ApiRouter {
 				activeForDevice: 0,
 				activeGlobal: 0,
 			},
-			redactedEvents: [],
+			redactedEvents: recentEvents,
 		};
 		sendApiSuccess(response, requestId, data);
 		return true;

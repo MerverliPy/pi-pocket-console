@@ -4,12 +4,15 @@
 		"includes": [
 			"src/**/*.ts",
 			"test/**/*.ts",
-			"public/**/*.js",
+			"public/app.js",
+			"public/sw.js",
+			"public/terminal.js",
 			"public/**/*.json",
-			"public/**/*.css",
+			"public/app.css",
 			"public/**/*.html",
 			"!dist",
-			"!node_modules"
+			"!node_modules",
+			"!public/xterm.*"
 		]
 	},
 	"formatter": {

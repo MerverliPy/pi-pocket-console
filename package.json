@@ -1,7 +1,7 @@
 {
 	"name": "pi-pocket-console",
 	"version": "0.1.0",
-	"description": "A secure, iPhone-first remote console for the Pi coding agent",
+	"description": "iPhone-first remote control surface for the Pi coding agent — pair your iPhone and control AI coding sessions from anywhere on your tailnet",
 	"type": "module",
 	"private": true,
 	"bin": {
@@ -16,7 +16,7 @@
 		"LICENSE"
 	],
 	"scripts": {
-		"build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').chmodSync('dist/cli.js', 0o755)\"",
+		"build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').chmodSync('dist/cli.js', 0o755)\" && cp node_modules/@xterm/xterm/css/xterm.css public/xterm.css && cp node_modules/@xterm/xterm/lib/xterm.js public/xterm.js",
 		"check": "biome check . && tsc --noEmit && node --check public/app.js && node --check public/sw.js",
 		"dev": "tsx src/cli.ts",
 		"postinstall": "node -e \"var fs=require('fs'),p='node_modules/@earendil-works/pi-coding-agent/npm-shrinkwrap.json';if(fs.existsSync(p)&&!process.env.PPC){process.env.PPC='1';fs.unlinkSync(p);var c=require('child_process');c.execSync('npm install --ignore-scripts',{cwd:process.cwd(),env:process.env,stdio:'inherit'})}\"",
@@ -25,7 +25,10 @@
 	},
 	"dependencies": {
 		"@earendil-works/pi-coding-agent": "0.82.0",
-		"ws": "^8.21.1"
+		"@xterm/addon-fit": "^0.10.0",
+		"@xterm/addon-webgl": "^0.19.0",
+		"@xterm/xterm": "^5.5.0",
+		"node-pty": "^1.2.0-beta.14"
 	},
 	"overrides": {
 		"brace-expansion": "5.0.8",
@@ -45,9 +48,15 @@
 	"keywords": [
 		"pi",
 		"coding-agent",
+		"ai-coding",
 		"iphone",
 		"pwa",
 		"remote-terminal",
-		"hybrid-terminal"
+		"remote-control",
+		"sse",
+		"rpc",
+		"tailscale",
+		"developer-tools",
+		"progressive-web-app"
 	]
 }
