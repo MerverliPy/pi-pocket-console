@@ -1,6 +1,7 @@
 import { randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 
 export const SESSION_COOKIE = "pi_pocket_session";
+export const SESSION_COOKIE_SECURE = "__Secure-pi_pocket_session";
 
 interface Session {
 	id: string;
@@ -98,7 +99,8 @@ export class AuthManager {
 	}
 
 	authenticate(cookieHeader: string | undefined): Session | undefined {
-		const token = parseCookies(cookieHeader).get(SESSION_COOKIE);
+		const cookies = parseCookies(cookieHeader);
+		const token = cookies.get(SESSION_COOKIE_SECURE) ?? cookies.get(SESSION_COOKIE);
 		if (!token) {
 			return undefined;
 		}
@@ -134,16 +136,20 @@ export class AuthManager {
 		return false;
 	}
 
+	private cookieName(): string {
+		return this.secureCookie ? SESSION_COOKIE_SECURE : SESSION_COOKIE;
+	}
+
 	sessionCookie(session: Session): string {
 		const secure = this.secureCookie ? "; Secure" : "";
-		return `${SESSION_COOKIE}=${session.token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(
+		return `${this.cookieName()}=${session.token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(
 			this.sessionTtlMs / 1_000,
 		)}${secure}`;
 	}
 
 	clearCookie(): string {
 		const secure = this.secureCookie ? "; Secure" : "";
-		return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure}`;
+		return `${this.cookieName()}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure}`;
 	}
 }
 
