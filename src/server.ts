@@ -6,9 +6,11 @@ import type { AddressInfo } from "node:net";
 import { basename, dirname, extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { RpcCommand, RpcExtensionUIResponse } from "@earendil-works/pi-coding-agent";
+import { ApiRouter } from "./api-router.ts";
 import { AuthManager, PairingError } from "./auth.ts";
 import { ControllerLeases } from "./controller-lease.ts";
 import { type InstanceController, InstanceManager, type InstanceSummary } from "./instance-manager.ts";
+import { WsTransport } from "./ws-transport.ts";
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 31_415;
@@ -100,6 +102,7 @@ export interface PocketServer {
 	readonly origin: string;
 	readonly pairingCode: string;
 	readonly workspaceRoot: string;
+	readonly wsTransport: WsTransport;
 	close(): Promise<void>;
 }
 
@@ -633,6 +636,15 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 	const bodyLimit = options.bodyLimitBytes ?? DEFAULT_BODY_LIMIT;
 	const rateLimit = options.apiRateLimit ?? { windowMs: API_WINDOW_MS, maxRequests: API_MAX_REQUESTS };
 	const apiRateBuckets = new Map<string, number[]>();
+	const apiRouter = new ApiRouter({
+		auth,
+		workspaceRoot,
+		workspaceName: basename(workspaceRoot),
+		secureCookie,
+		bodyLimit,
+		rateWindowMs: rateLimit.windowMs,
+		rateMaxRequests: rateLimit.maxRequests,
+	});
 	let expectedOrigin = options.publicOrigin ? normalizeOrigin(options.publicOrigin) : "";
 	if (localInsecure && expectedOrigin && !expectedOrigin.startsWith("http://")) {
 		throw new Error("localInsecure requires an http:// publicOrigin");
@@ -677,6 +689,13 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 						{ "Set-Cookie": auth.sessionCookie(session) },
 					);
 					return;
+				}
+
+				if (pathname.startsWith("/api/v1/")) {
+					const handled = await apiRouter.handle(request, response);
+					if (handled) {
+						return;
+					}
 				}
 
 				const session = auth.authenticate(request.headers.cookie);
@@ -869,6 +888,13 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 		expectedOrigin = `${protocol}://${hostForUrl(host)}:${port}`;
 	}
 
+	const wsTransport = new WsTransport({
+		server,
+		auth,
+		expectedOrigin,
+		heartbeatIntervalMs: 15_000,
+	});
+
 	let closePromise: Promise<void> | undefined;
 	return {
 		host,
@@ -876,11 +902,13 @@ export async function startPocketServer(options: PocketServerOptions): Promise<P
 		origin: expectedOrigin,
 		pairingCode: auth.pairingCode,
 		workspaceRoot,
+		wsTransport,
 		close(): Promise<void> {
 			if (!closePromise) {
 				closePromise = (async () => {
 					streamHub.close();
 					leases.clear();
+					wsTransport.close();
 					await controller.shutdown();
 					await new Promise<void>((resolveClose, rejectClose) => {
 						server.close((error) => (error ? rejectClose(error) : resolveClose()));

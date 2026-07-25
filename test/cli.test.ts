@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+// Phase 1A: validate CLI startup contract for hybrid terminal scope
+
 describe("CLI startup", () => {
 	test("starts and gracefully stops in explicit loopback preview mode", async () => {
 		const child = spawn(

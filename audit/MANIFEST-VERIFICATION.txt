@@ -1,0 +1,35 @@
+Phase 1A Manifest Verification
+=============================
+Timestamp: to-be-filled-by-validation
+Repository: MerverliPy/pi-pocket-console
+Branch: agent/v0.2-hybrid-terminal-pwa
+Baseline: e083ad04885620478009b7967d25744e134999c1
+
+Authorized 27-file scope:
+[ ] audit/MANIFEST-VERIFICATION.txt
+[ ] audit/PHASE-0-CONSISTENCY-ACCEPTANCE.md
+[ ] audit/PHASE-0-CROSS-DOCUMENT-CONSISTENCY-AUDIT.md
+[ ] audit/PHASE-1A-IMPLEMENTATION-RECEIPT.md
+[ ] audit/PHASE-1A-VALIDATION.txt
+[ ] docs/ARCHITECTURE.md
+[ ] docs/IPHONE-ACCEPTANCE.md
+[ ] docs/PROTOCOL.md
+[ ] docs/PTY-LIFECYCLE.md
+[ ] docs/THREAT-MODEL.md
+[ ] docs/VISUAL-SYSTEM.md
+[ ] package.json
+[ ] package-lock.json
+[ ] src/index.ts
+[ ] src/lifecycle/state-machine.ts
+[ ] src/protocol/constants.ts
+[ ] src/protocol/errors.ts
+[ ] src/protocol/types.ts
+[ ] src/protocol/utf8-stream.ts
+[ ] src/protocol/validate.ts
+[ ] src/security/attachment.ts
+[ ] src/security/lease.ts
+[ ] test/cli.test.ts
+[ ] test/phase1a-lifecycle.test.ts
+[ ] test/phase1a-protocol.test.ts
+[ ] test/phase1a-security.test.ts
+[ ] test/phase1a-utf8.test.ts
